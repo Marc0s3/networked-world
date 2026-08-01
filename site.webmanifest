@@ -1,0 +1,10 @@
+{
+  "name": "Networked World",
+  "short_name": "Networked World",
+  "description": "An interactive atlas of the Networked.art ecosystem.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#060709",
+  "theme_color": "#060709",
+  "icons": []
+}

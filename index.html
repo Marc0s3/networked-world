@@ -1,0 +1,1099 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Networked World v1.0.1 — Professional Atlas</title>
+  <meta name="description" content="An interactive atlas of the Networked.art ecosystem.">
+  <meta name="theme-color" content="#060709">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="site.webmanifest">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #060709;
+      --panel: #0b0d11;
+      --panel-soft: #11141a;
+      --panel-raised: #161a22;
+      --line: rgba(255,255,255,.095);
+      --line-strong: rgba(255,255,255,.17);
+      --text: #f4f5f7;
+      --muted: #949aa7;
+      --quiet: #666d79;
+      --accent: #9bdfff;
+      --artist: #c1b2ff;
+      --winner: #f2c66d;
+      --patron: #73d9ad;
+      --work: #f28bc8;
+      --danger: #ff8e99;
+      --sidebar: clamp(360px, 24vw, 440px);
+    }
+    * { box-sizing: border-box; }
+    html, body { width:100%; height:100%; margin:0; overflow:hidden; background:var(--bg); color:var(--text); font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button, input { font:inherit; }
+    button { cursor:pointer; }
+    button:disabled { cursor:wait; opacity:.48; }
+    #app { width:100%; height:100dvh; min-height:0; overflow:hidden; display:grid; grid-template-columns:var(--sidebar) minmax(0,1fr); grid-template-rows:minmax(0,1fr); }
+
+    .sidebar {
+      min-width:0; height:100%; display:flex; flex-direction:column; position:relative; z-index:5;
+      border-right:1px solid var(--line); background:
+        radial-gradient(circle at 0 0, rgba(155,223,255,.07), transparent 32%),
+        linear-gradient(180deg, #0d1015 0%, #090b0f 100%);
+    }
+    .brand { padding:20px 20px 15px; border-bottom:1px solid var(--line); }
+    .eyebrow { color:var(--accent); font:650 9px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing:.17em; text-transform:uppercase; }
+    .brand h1 { margin:8px 0 4px; font-size:22px; line-height:1; letter-spacing:-.045em; font-weight:650; }
+    .brand p { margin:0; color:var(--muted); font-size:11px; line-height:1.5; }
+
+    .controls { padding:12px 14px; display:grid; gap:8px; border-bottom:1px solid var(--line); }
+    .search-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px; }
+    .input { min-width:0; width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:9px; background:rgba(255,255,255,.04); color:var(--text); outline:none; }
+    .input:focus { border-color:rgba(155,223,255,.62); box-shadow:0 0 0 3px rgba(155,223,255,.07); }
+    .btn { border:1px solid var(--line); border-radius:9px; padding:8px 10px; background:rgba(255,255,255,.045); color:var(--text); white-space:nowrap; }
+    .btn:hover { background:rgba(255,255,255,.085); border-color:var(--line-strong); }
+    .btn.primary { background:rgba(155,223,255,.13); border-color:rgba(155,223,255,.38); }
+    .btn.primary:hover { background:rgba(155,223,255,.20); }
+    .btn.active { background:rgba(255,255,255,.105); border-color:rgba(255,255,255,.25); color:#fff; }
+    .status { display:flex; gap:7px; align-items:flex-start; color:var(--muted); font-size:10px; line-height:1.45; }
+    .status-dot { width:7px; height:7px; margin-top:3px; border-radius:50%; flex:none; background:var(--quiet); }
+    .status-dot.live { background:var(--patron); box-shadow:0 0 10px rgba(115,217,173,.55); }
+    .status-dot.busy { background:var(--winner); box-shadow:0 0 10px rgba(242,198,109,.48); }
+    .status-dot.error { background:var(--danger); }
+
+    .inspector { flex:1; min-height:0; overflow-y:auto; padding:14px; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.16) transparent; }
+    .overview, .inspect-card { display:none; }
+    .overview.visible, .inspect-card.visible { display:block; }
+    .hero-media {
+      width:100%; height:min(38vh,410px); min-height:240px; max-height:410px; display:grid; place-items:center; overflow:hidden;
+      border:1px solid var(--line); border-radius:15px; background:
+        radial-gradient(circle at 50% 40%, rgba(255,255,255,.045), transparent 65%), #080a0d;
+      box-shadow:0 18px 48px rgba(0,0,0,.28);
+    }
+    .hero-media img { display:block; width:100%; height:100%; max-height:410px; object-fit:contain; }
+    .hero-media.person img { width:min(72%,260px); height:auto; aspect-ratio:1; image-rendering:pixelated; border-radius:18px; border:1px solid rgba(255,255,255,.13); background:#fff; }
+    .media-placeholder { width:44%; aspect-ratio:1; transform:rotate(45deg); border:1px solid rgba(193,178,255,.45); background:rgba(193,178,255,.12); }
+
+    .collection-mosaic { width:100%; height:100%; padding:14px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-auto-rows:minmax(0,1fr); gap:8px; background:radial-gradient(circle at 50% 30%,rgba(193,178,255,.06),transparent 58%),#080a0d; }
+    .collection-mosaic[hidden] { display:none; }
+    .collection-mosaic img { width:100%; height:100%; min-height:0; object-fit:contain; border:1px solid rgba(255,255,255,.075); border-radius:10px; background:#060709; }
+    .map-header { max-width:min(560px,calc(100% - 420px)); }
+    .map-header .crumb { display:block; margin-bottom:5px; color:rgba(155,223,255,.72); font:650 8px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; letter-spacing:.13em; text-transform:uppercase; }
+    .copy { padding:15px 2px 0; }
+    .topline { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .type-label { color:var(--muted); font:650 9px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing:.15em; text-transform:uppercase; }
+    .badges { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; }
+    .badge { border:1px solid var(--line); border-radius:999px; padding:3px 7px; color:var(--muted); font-size:9px; }
+    .badge.artist { color:#d9d0ff; border-color:rgba(193,178,255,.38); background:rgba(193,178,255,.08); }
+    .badge.winner { color:#f8daa0; border-color:rgba(242,198,109,.38); background:rgba(242,198,109,.08); }
+    .badge.patron { color:#a4eccf; border-color:rgba(115,217,173,.38); background:rgba(115,217,173,.08); }
+    .title { margin:9px 0 4px; font-size:23px; line-height:1.12; letter-spacing:-.04em; overflow-wrap:anywhere; }
+    .subtitle { margin:0; color:var(--muted); font:10px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap:anywhere; }
+    .description { margin:13px 0 0; color:#cbd0d9; font-size:11px; line-height:1.6; }
+    .facts { margin:15px 0 0; padding:0; border-top:1px solid var(--line); }
+    .fact { display:grid; grid-template-columns:106px minmax(0,1fr); gap:10px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,.055); font-size:10px; line-height:1.45; }
+    .fact dt { color:var(--muted); }
+    .fact dd { margin:0; color:#e2e5eb; overflow-wrap:anywhere; }
+    .actions { display:flex; flex-wrap:wrap; gap:7px; margin-top:14px; }
+    .actions .btn { flex:1; min-width:104px; }
+    .relation-section { margin-top:17px; }
+    .relation-section h3 { margin:0 0 8px; color:var(--muted); font-size:9px; letter-spacing:.13em; text-transform:uppercase; }
+    .relation-list { display:grid; gap:5px; }
+    .relation-row { width:100%; min-width:0; display:grid; grid-template-columns:30px minmax(0,1fr) auto; align-items:center; gap:9px; padding:7px; border:1px solid rgba(255,255,255,.065); border-radius:9px; background:rgba(255,255,255,.02); color:var(--text); text-align:left; }
+    .relation-row:hover { background:rgba(255,255,255,.06); border-color:var(--line-strong); }
+    .relation-avatar { width:30px; height:30px; border-radius:50%; background:#fff; object-fit:cover; image-rendering:pixelated; }
+    .relation-copy { min-width:0; }
+    .relation-copy strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; font-weight:600; }
+    .relation-copy span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px; color:var(--muted); font-size:8px; }
+    .relation-role { color:var(--muted); font-size:8px; text-transform:uppercase; letter-spacing:.08em; }
+
+    .overview-card { padding:2px; }
+    .overview-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:14px; }
+    .overview-stat { padding:12px; border:1px solid rgba(255,255,255,.065); border-radius:11px; background:rgba(255,255,255,.025); }
+    .overview-stat strong { display:block; font-size:22px; font-weight:620; }
+    .overview-stat span { display:block; margin-top:3px; color:var(--muted); font-size:8px; letter-spacing:.11em; text-transform:uppercase; }
+    .hint { margin-top:15px; padding:12px; border:1px solid rgba(155,223,255,.12); border-radius:11px; background:rgba(155,223,255,.045); color:#b7c2cc; font-size:10px; line-height:1.55; }
+
+    .sidebar-footer { padding:11px 14px 13px; border-top:1px solid var(--line); display:grid; gap:9px; }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
+    .stat { padding:7px 5px; border:1px solid rgba(255,255,255,.06); border-radius:8px; background:rgba(255,255,255,.018); text-align:center; }
+    .stat strong { display:block; font-size:14px; font-weight:600; }
+    .stat span { display:block; margin-top:2px; color:var(--muted); font-size:7px; letter-spacing:.08em; text-transform:uppercase; }
+    .legend { display:flex; flex-wrap:wrap; gap:6px 10px; color:var(--muted); font-size:8px; }
+    .legend-item { display:inline-flex; align-items:center; gap:5px; }
+    .legend-mark { width:7px; height:7px; border-radius:50%; }
+    .legend-mark.work { border-radius:2px; }
+
+    .map-stage { position:relative; width:100%; height:100%; min-width:0; min-height:0; overflow:hidden; background:radial-gradient(circle at 52% 46%, rgba(155,223,255,.025), transparent 38%), #060709; }
+    canvas { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+    .map-header { position:absolute; z-index:3; top:16px; left:18px; pointer-events:none; }
+    .map-header strong { display:block; font-size:13px; font-weight:620; letter-spacing:-.02em; }
+    .map-header span { display:block; margin-top:3px; color:var(--muted); font-size:9px; letter-spacing:.01em; }
+    .toolbar { position:absolute; z-index:4; top:12px; right:12px; display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+    .toolbar .btn { padding:7px 9px; font-size:10px; backdrop-filter:blur(12px); background:rgba(9,11,15,.82); }
+    .map-footer { position:absolute; z-index:3; right:12px; bottom:12px; max-width:min(650px,calc(100% - 24px)); padding:8px 10px; border:1px solid var(--line); border-radius:9px; background:rgba(9,11,15,.76); backdrop-filter:blur(12px); color:var(--muted); font-size:8px; line-height:1.45; pointer-events:none; }
+    .tooltip { position:absolute; z-index:6; display:none; max-width:230px; padding:7px 9px; border:1px solid var(--line); border-radius:8px; background:rgba(11,13,17,.96); box-shadow:0 12px 28px rgba(0,0,0,.34); pointer-events:none; }
+    .tooltip.visible { display:block; }
+    .tooltip strong { display:block; font-size:10px; }
+    .tooltip span { display:block; margin-top:2px; color:var(--muted); font-size:8px; }
+    .log-panel { position:absolute; z-index:7; right:12px; bottom:48px; width:min(650px,calc(100% - 24px)); max-height:230px; overflow:auto; display:none; padding:10px 11px; border:1px solid var(--line); border-radius:11px; background:rgba(9,11,15,.97); box-shadow:0 18px 44px rgba(0,0,0,.38); }
+    .log-panel.visible { display:block; }
+    .log-entry { margin:4px 0; color:var(--muted); font:9px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space:pre-wrap; }
+    .log-entry.error { color:var(--danger); }
+
+    .context-menu { position:absolute; z-index:8; min-width:220px; display:none; padding:7px; border:1px solid var(--line); border-radius:12px; background:rgba(9,11,15,.97); box-shadow:0 22px 48px rgba(0,0,0,.44); backdrop-filter:blur(14px); }
+    .context-menu.visible { display:block; }
+    .context-menu-header { padding:7px 8px 9px; border-bottom:1px solid rgba(255,255,255,.06); }
+    .context-menu-header strong { display:block; font-size:11px; line-height:1.2; }
+    .context-menu-header span { display:block; margin-top:3px; color:var(--muted); font-size:8px; }
+    .context-menu-actions { display:grid; gap:4px; padding-top:7px; }
+    .context-menu-actions button { width:100%; border:1px solid rgba(255,255,255,.06); border-radius:9px; padding:8px 9px; background:rgba(255,255,255,.03); color:var(--text); text-align:left; font-size:10px; }
+    .context-menu-actions button:hover { background:rgba(255,255,255,.08); border-color:var(--line-strong); }
+    .context-menu-actions button[disabled] { opacity:.44; cursor:not-allowed; }
+    .context-menu-actions button small { display:block; margin-top:2px; color:var(--muted); font-size:8px; }
+
+    @media (max-width:920px) { :root { --sidebar:340px; } }
+    @media (max-width:720px) {
+      html,body { overflow:auto; }
+      #app { height:auto; min-height:100dvh; grid-template-columns:1fr; grid-template-rows:auto 72vh; }
+      .sidebar { height:auto; border-right:0; border-bottom:1px solid var(--line); }
+      .inspector { max-height:70vh; }
+      .map-stage { min-height:72vh; }
+    }
+  </style>
+  <script src="config.js"></script>
+</head>
+<body>
+<div id="app">
+  <aside class="sidebar">
+    <header class="brand">
+      <div class="eyebrow">Official Networked.art source</div>
+      <h1>Networked World</h1>
+      <p>Collections first. Relationships on demand.</p>
+    </header>
+
+    <section class="controls">
+      <div class="search-row">
+        <input id="accountInput" class="input" value="marc0s" spellcheck="false" aria-label="Networked.art handle, ENS, or wallet">
+        <button id="loadBtn" class="btn primary" type="button">Load</button>
+      </div>
+      <div class="status"><span id="statusDot" class="status-dot"></span><span id="statusText">Enter a Networked.art account.</span></div>
+    </section>
+
+    <main class="inspector">
+      <section id="overview" class="overview visible"></section>
+      <article id="inspectCard" class="inspect-card">
+        <div id="heroMedia" class="hero-media"><img id="inspectImage" alt="Selected node media" hidden><div id="collectionMosaic" class="collection-mosaic" hidden></div><div id="mediaPlaceholder" class="media-placeholder" hidden></div></div>
+        <div class="copy">
+          <div class="topline"><span id="inspectType" class="type-label"></span><div id="roleBadges" class="badges"></div></div>
+          <h2 id="inspectTitle" class="title"></h2>
+          <p id="inspectSubtitle" class="subtitle"></p>
+          <p id="inspectDescription" class="description" hidden></p>
+          <dl id="inspectFacts" class="facts"></dl>
+          <div class="actions">
+            <button id="focusBtn" class="btn" type="button">Focus</button>
+            <button id="expandPersonBtn" class="btn primary" type="button" hidden>Load artist network</button>
+            <button id="sourceBtn" class="btn" type="button">Open source</button>
+          </div>
+          <section id="relationSection" class="relation-section" hidden><h3 id="relationTitle">Relationships</h3><div id="relationList" class="relation-list"></div></section>
+        </div>
+      </article>
+    </main>
+
+    <footer class="sidebar-footer">
+      <div class="stats">
+        <div class="stat"><strong id="workCount">0</strong><span>Works</span></div>
+        <div class="stat"><strong id="winnerCount">0</strong><span>Winners</span></div>
+        <div class="stat"><strong id="patronCount">0</strong><span>Patrons</span></div>
+        <div class="stat"><strong id="linkCount">0</strong><span>Links</span></div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><i class="legend-mark" style="background:var(--artist)"></i>Artist</span>
+        <span class="legend-item"><i class="legend-mark" style="background:var(--winner)"></i>Auction winner</span>
+        <span class="legend-item"><i class="legend-mark" style="background:var(--patron)"></i>Patron</span>
+        <span class="legend-item"><i class="legend-mark work" style="background:var(--work)"></i>Artwork</span>
+      </div>
+    </footer>
+  </aside>
+
+  <section class="map-stage">
+    <canvas id="world" aria-label="Networked.art constellation map"></canvas>
+    <div class="map-header"><span id="mapCrumb" class="crumb">Profile overview</span><strong id="mapTitle">Professional Atlas</strong><span id="mapSubtitle">Collection atlas · relationships on demand</span></div>
+    <div class="toolbar">
+      <button id="backBtn" class="btn" type="button">Back</button>
+      <button id="originBtn" class="btn" type="button">Overview</button>
+      <button id="winnerFilter" class="btn active" type="button">Winners</button>
+      <button id="patronFilter" class="btn active" type="button">Patrons</button>
+      <button id="labelModeBtn" class="btn" type="button">Labels: smart</button>
+      <button id="fitBtn" class="btn" type="button">Fit</button>
+      <button id="logBtn" class="btn" type="button">Log</button>
+    </div>
+    <div class="map-footer">Start with collections, enter a collection to browse its works, then select an artwork to reveal every winner and patron. Right-click any node for quick actions.</div>
+    <div id="tooltip" class="tooltip"><strong id="tooltipTitle"></strong><span id="tooltipMeta"></span></div>
+    <section id="logPanel" class="log-panel" aria-live="polite"></section>
+    <div id="contextMenu" class="context-menu" role="menu" aria-hidden="true"></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const API_BASE = (new URLSearchParams(location.search).get('api') || window.NETWORKED_WORLD_API_BASE || '/api').replace(/\/$/, '');
+  const $ = id => document.getElementById(id);
+  const canvas = $('world');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const accountInput = $('accountInput');
+  const loadBtn = $('loadBtn');
+  const statusDot = $('statusDot');
+  const statusText = $('statusText');
+  const overview = $('overview');
+  const inspectCard = $('inspectCard');
+  const heroMedia = $('heroMedia');
+  const inspectImage = $('inspectImage');
+  const mediaPlaceholder = $('mediaPlaceholder');
+  const collectionMosaic = $('collectionMosaic');
+  const inspectType = $('inspectType');
+  const roleBadges = $('roleBadges');
+  const inspectTitle = $('inspectTitle');
+  const inspectSubtitle = $('inspectSubtitle');
+  const inspectDescription = $('inspectDescription');
+  const inspectFacts = $('inspectFacts');
+  const focusBtn = $('focusBtn');
+  const expandPersonBtn = $('expandPersonBtn');
+  const sourceBtn = $('sourceBtn');
+  const relationSection = $('relationSection');
+  const relationTitle = $('relationTitle');
+  const relationList = $('relationList');
+  const mapCrumb = $('mapCrumb');
+  const mapTitle = $('mapTitle');
+  const mapSubtitle = $('mapSubtitle');
+  const backBtn = $('backBtn');
+  const winnerFilter = $('winnerFilter');
+  const patronFilter = $('patronFilter');
+  const labelModeBtn = $('labelModeBtn');
+  const originBtn = $('originBtn');
+  const fitBtn = $('fitBtn');
+  const logBtn = $('logBtn');
+  const logPanel = $('logPanel');
+  const contextMenu = $('contextMenu');
+  const tooltip = $('tooltip');
+  const tooltipTitle = $('tooltipTitle');
+  const tooltipMeta = $('tooltipMeta');
+  const countEls = { work:$('workCount'), winner:$('winnerCount'), patron:$('patronCount'), link:$('linkCount') };
+
+  const palette = {
+    bg:'#060709', artist:'#c1b2ff', winner:'#f2c66d', patron:'#73d9ad', work:'#f28bc8', accent:'#9bdfff'
+  };
+  const edgePalette = {
+    winner:'rgba(242,198,109,.88)', patron:'rgba(115,217,173,.72)', network:'rgba(155,223,255,.42)'
+  };
+
+  const state = {
+    nodes:new Map(), edges:new Map(), groups:new Map(), profiles:new Map(), images:new Map(), glyphs:new Map(),
+    selectedId:null, selectedGroupId:null, hoveredId:null, hoveredGroupId:null, seedId:null, busy:false, started:false, generation:0,
+    viewMode:'overview', focusContextId:null, returnView:null,
+    camera:{x:0,y:0,zoom:1}, cameraTween:null, overviewCamera:null,
+    positionTween:null, pointer:null, keys:new Set(), logs:[],
+    filters:{winners:true, patrons:true}, labelMode:'smart', drawOrder:[], lastAspect:1,
+    aggregateHits:[], groupHits:[], frameNow:0, contextNodeId:null, contextGroupId:null
+  };
+
+  const normalize = value => String(value ?? '').trim().toLowerCase();
+  const isAddress = value => /^0x[a-fA-F0-9]{40}$/.test(String(value || '').trim());
+  const short = (value, a=6, b=4) => { const s=String(value ?? ''); return s.length>a+b+3 ? `${s.slice(0,a)}…${s.slice(-b)}` : s; };
+  const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const hash32 = input => { let h=2166136261>>>0; for(const ch of String(input)){h^=ch.charCodeAt(0);h=Math.imul(h,16777619);} h+=h<<13;h^=h>>>7;h+=h<<3;h^=h>>>17;h+=h<<5;return h>>>0; };
+  const rnd = input => hash32(input)/4294967295;
+  const clamp = (v,min,max) => Math.max(min,Math.min(max,v));
+  const easeInOutCubic = t => t < .5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2;
+  const easeOutCubic = t => 1-Math.pow(1-t,3);
+
+  function log(message, kind='info') {
+    const time=new Date().toLocaleTimeString('en-GB');
+    state.logs.unshift({time,message:String(message),kind});
+    state.logs=state.logs.slice(0,140);
+    logPanel.innerHTML=state.logs.map(x=>`<div class="log-entry ${x.kind==='error'?'error':''}">[${escapeHtml(x.time)}] ${escapeHtml(x.message)}</div>`).join('');
+  }
+  function setStatus(mode,text){ statusDot.className='status-dot'+(mode?` ${mode}`:''); statusText.textContent=text; }
+  function setBusy(flag,text){ state.busy=flag; loadBtn.disabled=flag; expandPersonBtn.disabled=flag; if(flag)setStatus('busy',text||'Loading…'); }
+  async function api(path){ const response=await fetch(`${API_BASE}${path}`,{headers:{Accept:'application/json'}}); let payload; try{payload=await response.json();}catch{throw new Error(`The local API returned non-JSON data (HTTP ${response.status}).`);} if(!response.ok)throw new Error(payload.error||`HTTP ${response.status}`); return payload; }
+
+  // Networked-compatible deterministic fallback glyph. Official avatar URLs are preferred whenever the API supplies one.
+  function glyphRandom(seed){ const out=[]; let a=3735928559,b=1103547991; for(let i=0;i<seed.length;i++){const c=seed.charCodeAt(i);a=Math.imul(a^c,2654435761);b=Math.imul(b^c,1597334677);} a=Math.imul(a^(a>>>16),2246822507);a^=Math.imul(b^(b>>>13),3266489909);b=Math.imul(b^(b>>>16),2246822507);b^=Math.imul(a^(a>>>13),3266489909);let v=a+b;for(let i=0;i<64;i++){v=Math.imul(v^(v>>>15),1|v);v^=v+Math.imul(v^(v>>>7),61|v);out.push(((v^(v>>>14))>>>0)/4294967296);}return out; }
+  function glyphCells(seed){ const random=glyphRandom(String(seed).trim().toLowerCase()); const pick=i=>random[i%random.length]; const bool=(i,t=.5)=>pick(i)>t; const types=['grid','rings','blocks','diagonal']; const type=types[Math.floor(pick(0)*types.length)]; const cells=[]; const half=3; for(let row=0;row<5;row++){const line=[];for(let col=0;col<5;col++){const mirrored=col>=half?4-col:col;const index=row*half+mirrored+1;let active;if(type==='rings'){const ring=Math.max(Math.abs(col-2),Math.abs(row-2));active=bool(ring+index,.4);}else if(type==='blocks'){active=bool(Math.floor(row/2)*3+Math.floor(mirrored/2)+1,.45);}else if(type==='diagonal'){active=bool(index,.35+((col+row)%3)*.15);}else active=bool(index,.5);line.push(active);}cells.push(line);}return cells; }
+  function glyphSvg(seed,size=180){ const cells=glyphCells(seed||'unknown'); const padding=size*.15, cell=(size-padding*2)/5; let shapes=''; for(let r=0;r<5;r++)for(let c=0;c<5;c++)if(cells[r][c])shapes+=`<rect x="${padding+c*cell}" y="${padding+r*cell}" width="${cell}" height="${cell}" fill="#000"/>`; return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/>${shapes}</svg>`; }
+  function glyphUri(seed,size=180){ const key=`${normalize(seed||'unknown')}:${size}`; if(!state.glyphs.has(key))state.glyphs.set(key,`data:image/svg+xml;base64,${btoa(glyphSvg(seed,size))}`); return state.glyphs.get(key); }
+  function personSeed(node){ return node.metadata.address||node.metadata.account||node.subtitle||node.id; }
+  function personImageUrl(node){ return node.metadata.avatarUrl||glyphUri(personSeed(node),240); }
+  function imageResource(url){ if(!url)return null; if(state.images.has(url))return state.images.get(url); const res={image:new Image(),ready:false,failed:false}; res.image.crossOrigin='anonymous'; res.image.onload=()=>{res.ready=true;}; res.image.onerror=()=>{res.failed=true;}; res.image.src=url; state.images.set(url,res); return res; }
+
+  function rolesOf(node){ return new Set(node.roles||[]); }
+  function addRole(node,role){ if(!role)return; const roles=rolesOf(node); roles.add(role); node.roles=[...roles]; }
+  function addNode(raw){
+    const id=normalize(raw.id); if(!id)return null;
+    const existing=state.nodes.get(id);
+    if(existing){
+      existing.metadata={...(existing.metadata||{}),...(raw.metadata||{})};
+      for(const role of raw.roles||[])addRole(existing,role);
+      Object.assign(existing,{...raw,roles:existing.roles,metadata:existing.metadata,id});
+      return existing;
+    }
+    const node={id,type:raw.type,roles:[...new Set(raw.roles||[])],label:raw.label||short(id),subtitle:raw.subtitle||'',x:0,y:0,displayX:0,displayY:0,vx:0,vy:0,anchorX:0,anchorY:0,metadata:raw.metadata||{},loading:false,expandedProfile:false,...raw,id};
+    state.nodes.set(id,node);
+    if(node.type==='person')imageResource(personImageUrl(node));
+    return node;
+  }
+  function addEdge(sourceId,targetId,type,metadata={}){ const source=normalize(sourceId),target=normalize(targetId); if(!source||!target||source===target)return; const key=`${source}|${target}|${type}`; if(!state.edges.has(key))state.edges.set(key,{id:key,source,target,type,metadata}); }
+  function addPerson(person,role){ if(!person?.address||!isAddress(person.address))return null; const address=normalize(person.address); const node=addNode({id:`person:${address}`,type:'person',roles:[role],label:person.label||person.handle||short(address),subtitle:address,metadata:{address,account:person.handle||address,handle:person.handle||null,avatarUrl:person.avatarUrl||null}}); addRole(node,role); imageResource(personImageUrl(node)); return node; }
+
+  function workNodes(){ return [...state.nodes.values()].filter(n=>n.type==='work'); }
+  function personNodes(){ return [...state.nodes.values()].filter(n=>n.type==='person'); }
+  function connectedWorkIds(personId){ const ids=[];for(const e of state.edges.values()){if((e.type==='winner'||e.type==='patron')&&e.source===personId)ids.push(e.target);if((e.type==='winner'||e.type==='patron')&&e.target===personId)ids.push(e.source);}return [...new Set(ids)]; }
+  function relationPeople(workId){ const output=[];for(const e of state.edges.values()){if((e.type==='winner'||e.type==='patron')&&e.target===workId){const person=state.nodes.get(e.source);if(person)output.push({person,role:e.type});}else if((e.type==='winner'||e.type==='patron')&&e.source===workId){const person=state.nodes.get(e.target);if(person)output.push({person,role:e.type});}}return output; }
+  function relatedToWork(personId,workId){ return relationPeople(workId).some(entry=>entry.person.id===personId); }
+  function selectedNode(){ return state.nodes.get(state.selectedId)||null; }
+
+
+function selectedGroup(){ return state.groups.get(state.selectedGroupId)||null; }
+function sharedWorkCount(node){ return node?.type==='person' ? connectedWorkIds(node.id).length : 0; }
+function groupWorks(group){ return (group?.workIds||[]).map(id=>state.nodes.get(id)).filter(Boolean); }
+function computeGroupMetrics(){
+  for(const group of state.groups.values()){
+    const ids=new Set();for(const work of groupWorks(group))for(const entry of relationPeople(work.id))ids.add(entry.person.id);
+    group.peopleIds=ids;let winners=0,patrons=0;for(const id of ids){const person=state.nodes.get(id);if(!person)continue;const roles=rolesOf(person);if(roles.has('auctionWinner'))winners++;if(roles.has('patron'))patrons++;}
+    group.stats={works:group.workIds.length,winners,patrons,people:ids.size};
+  }
+}
+function groupPeople(group){return [...(group?.peopleIds||new Set())].map(id=>state.nodes.get(id)).filter(Boolean);}
+function groupStats(group){return group?.stats||{works:group?.workIds?.length||0,winners:0,patrons:0,people:0};}
+function groupAccent(group,alpha=1){
+  const hue=205+Math.floor(rnd(group.id)*58);
+  return `hsla(${hue},58%,69%,${alpha})`;
+}
+function groupSharedCount(a,b){const set=a?.peopleIds||new Set();let count=0;for(const id of b?.peopleIds||[])if(set.has(id))count++;return count;}
+function relationshipStats(workId){
+    const work=state.nodes.get(workId);if(work?.metadata?.relationshipStats)return work.metadata.relationshipStats;
+    const people=relationPeople(workId),winnerIds=new Set();let winners=0,patrons=0;
+    for(const entry of people)if(entry.role==='winner'){winners++;winnerIds.add(entry.person.id);}
+    for(const entry of people)if(entry.role==='patron'&&!winnerIds.has(entry.person.id))patrons++;
+    const result={winners,patrons,total:winners+patrons};if(work)work.metadata.relationshipStats=result;return result;
+  }
+  function hideContextMenu(){ contextMenu.classList.remove('visible'); contextMenu.setAttribute('aria-hidden','true'); contextMenu.innerHTML=''; state.contextNodeId=null; state.contextGroupId=null; }
+  function menuButton(action,label,sub='',disabled=false){ return `<button type="button" data-action="${escapeHtml(action)}" ${disabled?'disabled':''}><span>${escapeHtml(label)}</span>${sub?`<small>${escapeHtml(sub)}</small>`:''}</button>`; }
+  function showContextMenu(node, clientX, clientY){
+    if(!node){ hideContextMenu(); return; }
+    state.contextNodeId=node.id;
+    const actions=[];
+    if(node.type==='work'){
+      actions.push(menuButton('focus','Reveal relationships','Open the focused artwork view.'));
+      actions.push(menuButton('center','Center view','Move the camera to this artwork.'));
+      actions.push(menuButton('source','Open on Networked.art'));
+      actions.push(menuButton('copy-id','Copy contract and token',`${short(node.metadata.contract)} · #${node.metadata.tokenId}`));
+    } else {
+      actions.push(menuButton('focus','Focus person','Highlight this collector or artist.'));
+      actions.push(menuButton('center','Center view','Move the camera to this person.'));
+      actions.push(menuButton('source','Open on Networked.art'));
+      actions.push(menuButton('copy-address','Copy wallet address',short(node.metadata.address||'',8,6)));
+      actions.push(menuButton('load-network','Load artist network','Fetch this person’s own artist works.', !!node.expandedProfile || node.loading));
+    }
+    contextMenu.innerHTML=`<div class="context-menu-header"><strong>${escapeHtml(node.label)}</strong><span>${escapeHtml(node.type==='work'?(node.metadata.collectionName||'Artwork'):[...rolesOf(node)].map(roleLabel).join(' · '))}</span></div><div class="context-menu-actions">${actions.join('')}</div>`;
+    const stage=canvas.getBoundingClientRect();
+    const maxX=stage.width-236,maxY=stage.height-280;
+    const x=Math.max(10,Math.min(clientX-stage.left,maxX));
+    const y=Math.max(10,Math.min(clientY-stage.top,maxY));
+    contextMenu.style.left=`${x}px`; contextMenu.style.top=`${y}px`;
+    contextMenu.classList.add('visible'); contextMenu.setAttribute('aria-hidden','false');
+  }
+  function showGroupContextMenu(group,clientX,clientY){
+    if(!group){hideContextMenu();return;}state.contextGroupId=group.id;
+    const stats=groupStats(group),actions=[menuButton('focus-group','Open collection',`${stats.works} verified works.`),menuButton('fit-group','Center collection'),menuButton('open-contract','Open contract explorer'),menuButton('copy-contract','Copy contract address',short(group.address||'',8,6))];
+    contextMenu.innerHTML=`<div class="context-menu-header"><strong>${escapeHtml(group.name)}</strong><span>${stats.works} works · ${stats.patrons} patrons</span></div><div class="context-menu-actions">${actions.join('')}</div>`;
+    const stage=canvas.getBoundingClientRect(),maxX=stage.width-236,maxY=stage.height-250,x=Math.max(10,Math.min(clientX-stage.left,maxX)),y=Math.max(10,Math.min(clientY-stage.top,maxY));
+    contextMenu.style.left=`${x}px`;contextMenu.style.top=`${y}px`;contextMenu.classList.add('visible');contextMenu.setAttribute('aria-hidden','false');
+  }
+
+  function nodeBaseRadius(node){ if(node.type==='work')return state.viewMode==='focus-collection'?31:34; const roles=rolesOf(node); if(roles.has('artist'))return state.viewMode==='overview'?38:31; if(roles.has('auctionWinner'))return 22; return 19; }
+  function nodeDepth(node){
+    if(node.id===state.selectedId)return 1;
+    if(node.type==='person'&&rolesOf(node).has('artist'))return .72;
+    if(node.type==='person')return .82;
+    return .52;
+  }
+  function screenRadius(node){
+    const scale=clamp(Math.sqrt(state.camera.zoom),.72,1.18);
+    const focusBoost=node.id===state.selectedId?1.16:1;
+    return nodeBaseRadius(node)*scale*focusBoost;
+  }
+  function purePatron(node){ const roles=rolesOf(node); return node.type==='person'&&roles.has('patron')&&!roles.has('artist')&&!roles.has('auctionWinner'); }
+  
+
+function nodeVisible(node){
+  const selected=selectedNode();
+  if(state.viewMode==='overview'){
+    return node.type==='person' && rolesOf(node).has('artist');
+  }
+  if(state.viewMode==='focus-collection'){
+    const group=selectedGroup();
+    if(node.type==='work')return !!group && node.metadata.groupId===group.id;
+    if(node.type==='person')return !!group && node.id===group.artistId;
+    return false;
+  }
+  if(state.viewMode==='focus-work'&&selected?.type==='work'){
+    if(node.type==='work')return node.id===selected.id;
+    if(node.type!=='person'||!relatedToWork(node.id,selected.id))return false;
+    const roles=rolesOf(node);
+    const winner=roles.has('auctionWinner')&&state.filters.winners;
+    const patron=roles.has('patron')&&state.filters.patrons;
+    return winner||patron;
+  }
+  if(state.viewMode==='focus-person'&&selected?.type==='person'){
+    if(node.type==='person')return node.id===selected.id||rolesOf(node).has('artist');
+    if(node.type==='work')return connectedWorkIds(selected.id).includes(node.id);
+    return false;
+  }
+  return false;
+}
+function edgeVisible(edge){
+  const a=state.nodes.get(edge.source),b=state.nodes.get(edge.target);
+  if(!a||!b)return false;
+  if(state.viewMode==='overview')return edge.type==='network'&&nodeVisible(a)&&nodeVisible(b);
+  if(state.viewMode==='focus-collection')return false;
+  if(edge.type==='created')return false;
+  return nodeVisible(a)&&nodeVisible(b);
+}
+
+  function updateCounts(){
+    let works=0,winners=0,patrons=0,links=0;
+    for(const node of state.nodes.values()){
+      if(node.type==='work')works++;
+      if(node.type==='person'){
+        const roles=rolesOf(node);
+        if(roles.has('auctionWinner'))winners++;
+        if(roles.has('patron'))patrons++;
+      }
+    }
+    for(const edge of state.edges.values())if(edge.type==='winner'||edge.type==='patron'||edge.type==='network'||edge.type==='created')links++;
+    countEls.work.textContent=String(works);countEls.winner.textContent=String(winners);countEls.patron.textContent=String(patrons);countEls.link.textContent=String(links);
+    renderOverview();
+  }
+
+  function clearWorld(){
+    state.generation++;state.nodes.clear();state.edges.clear();state.groups.clear();state.profiles.clear();
+    state.selectedId=null;state.selectedGroupId=null;state.hoveredId=null;state.hoveredGroupId=null;state.seedId=null;state.viewMode='overview';state.focusContextId=null;state.returnView=null;
+    state.camera={x:0,y:0,zoom:1};state.cameraTween=null;state.overviewCamera=null;state.positionTween=null;
+    state.started=false;state.drawOrder=[];state.aggregateHits=[];state.groupHits=[];
+    mapCrumb.textContent='Profile overview';mapTitle.textContent='Professional Atlas';mapSubtitle.textContent='Collection atlas · relationships on demand';
+    inspectCard.classList.remove('visible');overview.classList.add('visible');setStatus('','Enter a Networked.art account.');updateCounts();syncToolbar();
+  }
+
+  async function ensureWorkDetail(node){
+    if(node.metadata.detail)return node.metadata.detail;
+    if(node.metadata.detailPromise)return node.metadata.detailPromise;
+    const account=node.metadata.routeAccount||node.metadata.creatorAddress||accountInput.value.trim();
+    node.metadata.detailPromise=api(`/networked/work/${node.metadata.contract}/${node.metadata.tokenId}?account=${encodeURIComponent(account)}`).then(detail=>{
+      node.metadata.detail=detail;node.label=detail.title||node.label;node.metadata.thumbnail=detail.thumbnail||null;
+      if(detail.thumbnail)imageResource(detail.thumbnail);
+      return detail;
+    }).finally(()=>delete node.metadata.detailPromise);
+    return node.metadata.detailPromise;
+  }
+  function attachRelations(workNode,detail){
+    if(workNode.metadata.relationsAttached)return;
+    if(detail.auctionWinner){const winner=addPerson(detail.auctionWinner,'auctionWinner');if(winner)addEdge(winner.id,workNode.id,'winner',{proof:detail.auctionWinnerSource});}
+    const patrons=Array.isArray(detail.patrons)?detail.patrons:[];
+    for(const patron of patrons){const node=addPerson(patron,'patron');if(node)addEdge(node.id,workNode.id,'patron');}
+    const winnerCount=detail.auctionWinner?1:0;workNode.metadata.relationsAttached=true;workNode.metadata.winnerCount=winnerCount;workNode.metadata.patronCount=patrons.length;workNode.metadata.relationshipStats={winners:winnerCount,patrons:patrons.length,total:winnerCount+patrons.length};
+  }
+  async function mapLimit(items,limit,worker){let cursor=0;const runners=Array.from({length:Math.min(limit,items.length)},async()=>{while(cursor<items.length){const i=cursor++;await worker(items[i],i);}});await Promise.all(runners);}
+
+  async function buildProfileGraph(account,parentNode=null){
+    const key=normalize(account);let payload=state.profiles.get(key);
+    if(!payload){payload=await api(`/networked/profile/${encodeURIComponent(account)}/works`);state.profiles.set(key,payload);}
+    const identity=payload.identity||{};const address=identity.address||(isAddress(account)?account:null);
+    if(!address)throw new Error(`Networked.art did not return an Ethereum address for ${account}.`);
+    const artist=addPerson({address,label:identity.displayName||identity.account||payload.account||short(address),handle:identity.account||payload.account,avatarUrl:identity.avatarUrl||null},'artist');
+    artist.metadata.profile=payload;artist.metadata.bio=identity.bio||null;artist.metadata.origin=identity.origin||null;artist.metadata.year=identity.year||null;artist.metadata.account=identity.account||payload.account||account;artist.expandedProfile=true;
+    if(parentNode&&parentNode.id!==artist.id)addEdge(parentNode.id,artist.id,'network');
+
+    const collections=payload.collections||[],works=payload.works||[];const workNodesForProfile=[];
+    for(const collection of collections){
+      const groupId=normalize(collection.address);
+      const group=state.groups.get(groupId)||{id:groupId,address:collection.address,name:collection.name||short(collection.address),metadata:collection,workIds:[],artistId:artist.id};
+      group.artistId=artist.id;state.groups.set(groupId,group);
+      const collectionWorks=works.filter(w=>normalize(w.collectionAddress)===groupId);
+      for(const work of collectionWorks){
+        const node=addNode({id:`work:${work.contract}:${work.tokenId}`,type:'work',label:`Token #${work.tokenId}`,subtitle:`${short(work.contract)} · #${work.tokenId}`,metadata:{...work,groupId}});
+        addEdge(artist.id,node.id,'created',{collection:groupId});
+        if(!group.workIds.includes(node.id))group.workIds.push(node.id);
+        workNodesForProfile.push(node);
+      }
+    }
+
+    const generation=state.generation;let done=0;
+    await mapLimit(workNodesForProfile,4,async node=>{
+      if(generation!==state.generation)return;
+      try{const detail=await ensureWorkDetail(node);attachRelations(node,detail);}
+      catch(error){node.metadata.detailError=error.message;log(`Could not load relationships for ${node.label}: ${error.message}`,'error');}
+      finally{done++;setStatus('busy',`Loading artwork relationships ${done}/${workNodesForProfile.length}…`);}
+    });
+    layoutGraph();updateCounts();log(`${artist.label}: ${collections.length} collections, ${works.length} verified works, all available winners and patrons loaded.`);return artist;
+  }
+
+  async function start(){
+    if(state.busy)return;clearWorld();const account=accountInput.value.trim();
+    if(!account){setStatus('error','Enter a Networked.art handle, ENS, or wallet.');return;}
+    setBusy(true,'Reading the official Networked.art source…');
+    try{
+      const artist=await buildProfileGraph(account);state.seedId=artist.id;state.started=true;
+      mapCrumb.textContent='Profile overview';mapTitle.textContent=artist.label;mapSubtitle.textContent='Collection atlas · select a collection, then an artwork';
+      state.viewMode='overview';state.selectedId=null;state.selectedGroupId=null;showInspector(null);syncToolbar();fitOverview(true);
+      setStatus('live',`Complete graph: ${countEls.work.textContent} works, ${countEls.winner.textContent} winners, ${countEls.patron.textContent} patrons.`);
+    }catch(error){log(error.stack||error.message,'error');setStatus('error',error.message);}finally{setBusy(false);}
+  }
+  async function expandPersonNetwork(node){
+    if(!node||node.type!=='person'||node.expandedProfile||node.loading)return;
+    node.loading=true;setBusy(true,`Loading ${node.label}'s artist network…`);
+    try{await buildProfileGraph(node.metadata.account||node.metadata.address,node);node.expandedProfile=true;layoutGraph();exitFocus(false);fitOverview(false);setStatus('live',`${node.label}'s artist network was added.`);showInspector(node);}
+    catch(error){log(error.stack||error.message,'error');setStatus('error',error.message);}finally{node.loading=false;setBusy(false);}
+  }
+
+
+function layoutGraph(){
+  if(!state.nodes.size)return;
+  const rect=canvas.getBoundingClientRect();
+  const aspect=clamp(rect.width/Math.max(1,rect.height),.75,3.2);
+  state.lastAspect=aspect;computeGroupMetrics();
+  const artists=personNodes().filter(n=>rolesOf(n).has('artist')).sort((a,b)=>a.id===state.seedId?-1:b.id===state.seedId?1:a.id.localeCompare(b.id));
+  const seed=state.nodes.get(state.seedId)||artists[0];
+  artists.forEach((artist,index)=>{
+    if(artist===seed){artist.anchorX=0;artist.anchorY=0;}
+    else{
+      const ring=Math.floor((index-1)/6),slot=(index-1)%6;
+      const angle=-Math.PI/2+slot/6*Math.PI*2+rnd(artist.id)*.16;
+      const radius=2600+ring*2200;
+      artist.anchorX=Math.cos(angle)*radius*Math.sqrt(aspect);
+      artist.anchorY=Math.sin(angle)*radius/Math.sqrt(aspect);
+    }
+    artist.x=artist.anchorX;artist.y=artist.anchorY;artist.vx=artist.vy=0;
+  });
+
+  const groupsByArtist=new Map();
+  for(const group of state.groups.values()){
+    if(!groupsByArtist.has(group.artistId))groupsByArtist.set(group.artistId,[]);
+    groupsByArtist.get(group.artistId).push(group);
+  }
+  for(const [artistId,groupsRaw] of groupsByArtist){
+    const artist=state.nodes.get(artistId)||seed;
+    const groups=groupsRaw.sort((a,b)=>b.workIds.length-a.workIds.length||a.name.localeCompare(b.name));
+    const count=Math.max(1,groups.length);
+    groups.forEach((group,index)=>{
+      const workCount=group.workIds.length;
+      const cardW=clamp(350+Math.log2(Math.max(2,workCount))*22,360,470);
+      const cardH=clamp(226+Math.log2(Math.max(2,workCount))*10,238,282);
+      let angle=0,rx=0,ry=0;
+      if(count===1){angle=0;rx=560;ry=0;}
+      else if(count===2){angle=index===0?0:Math.PI;rx=610;ry=0;}
+      else if(count<=6){
+        angle=-Math.PI/2+(index/count)*Math.PI*2;
+        rx=700*Math.sqrt(aspect)+cardW*.36;
+        ry=520/Math.sqrt(aspect)+cardH*.24;
+      }else{
+        const capacities=[6,10,14,18];let rest=index,ring=0,ringCount=capacities[0];
+        while(rest>=ringCount&&ring<capacities.length-1){rest-=ringCount;ring++;ringCount=Math.min(capacities[ring],count-capacities.slice(0,ring).reduce((a,b)=>a+b,0));}
+        ringCount=Math.max(1,ringCount);angle=-Math.PI/2+(rest/ringCount)*Math.PI*2+ring*.13;
+        rx=(700+ring*850)*Math.sqrt(aspect)+cardW*.36;
+        ry=(520+ring*650)/Math.sqrt(aspect)+cardH*.24;
+      }
+      group.cx=(artist?.x||0)+Math.cos(angle)*rx;
+      group.cy=(artist?.y||0)+Math.sin(angle)*(ry||460);
+      group.card={x:group.cx-cardW/2,y:group.cy-cardH/2,w:cardW,h:cardH};
+      group.overviewAngle=angle;
+
+      const works=groupWorks(group);
+      const cols=Math.max(1,Math.ceil(Math.sqrt(works.length*Math.max(.72,aspect*.72))));
+      const rows=Math.max(1,Math.ceil(works.length/cols));
+      const spacingX=128,spacingY=116;
+      works.forEach((node,i)=>{
+        const col=i%cols,row=Math.floor(i/cols);
+        node.anchorX=group.cx+(col-(cols-1)/2)*spacingX;
+        node.anchorY=group.cy+(row-(rows-1)/2)*spacingY;
+        node.x=node.anchorX;node.y=node.anchorY;node.vx=node.vy=0;
+      });
+    });
+  }
+
+  for(const person of personNodes()){
+    if(rolesOf(person).has('artist'))continue;
+    const connected=connectedWorkIds(person.id).map(id=>state.nodes.get(id)).filter(Boolean);
+    if(connected.length){
+      person.anchorX=connected.reduce((s,n)=>s+n.x,0)/connected.length;
+      person.anchorY=connected.reduce((s,n)=>s+n.y,0)/connected.length;
+    }else{
+      const angle=rnd(person.id)*Math.PI*2;
+      person.anchorX=(seed?.x||0)+Math.cos(angle)*360;
+      person.anchorY=(seed?.y||0)+Math.sin(angle)*360;
+    }
+    person.x=person.anchorX;person.y=person.anchorY;person.vx=person.vy=0;
+  }
+  computeGroupBounds();
+  state.drawOrder=computeDrawOrder();
+  if(!state.positionTween)for(const node of state.nodes.values()){node.displayX=node.x;node.displayY=node.y;}
+}
+
+function computeGroupBounds(){
+    for(const group of state.groups.values()){
+      const nodes=group.workIds.map(id=>state.nodes.get(id)).filter(Boolean);if(!nodes.length)continue;
+      let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+      for(const n of nodes){minX=Math.min(minX,n.x);minY=Math.min(minY,n.y);maxX=Math.max(maxX,n.x);maxY=Math.max(maxY,n.y);}
+      group.bounds={x:minX-80,y:minY-96,w:maxX-minX+160,h:maxY-minY+178};
+      group.hubX=(minX+maxX)/2;group.hubY=(minY+maxY)/2;
+    }
+  }
+  function computeDrawOrder(){
+    const works=workNodes().sort((a,b)=>a.id.localeCompare(b.id));
+    const people=personNodes().sort((a,b)=>{const ra=rolesOf(a),rb=rolesOf(b);const pa=ra.has('artist')?3:ra.has('auctionWinner')?2:1,pb=rb.has('artist')?3:rb.has('auctionWinner')?2:1;return pa-pb||a.id.localeCompare(b.id);});
+    return [...works,...people];
+  }
+
+  function aggregatePosition(work){
+    const group=state.groups.get(work.metadata.groupId);const ox=work.x-(group?.hubX??0),oy=work.y-(group?.hubY??0);let angle=Math.atan2(oy,ox);
+    if(Math.abs(ox)+Math.abs(oy)<1)angle=Math.atan2(work.y,work.x||1);
+    return {x:work.x+Math.cos(angle)*82,y:work.y+Math.sin(angle)*82};
+  }
+  function focusTargetsForWork(work){
+    const targets=new Map();for(const node of state.nodes.values())targets.set(node.id,{x:node.x,y:node.y});
+    const people=relationPeople(work.id);const winners=people.filter(x=>x.role==='winner');const winnerIds=new Set(winners.map(x=>x.person.id));const patrons=people.filter(x=>x.role==='patron'&&!winnerIds.has(x.person.id));
+    const outward=Math.atan2(work.y,work.x||1);
+    winners.forEach((entry,i)=>{const angle=outward-Math.PI*.5+(i-(winners.length-1)/2)*.35;targets.set(entry.person.id,{x:work.x+Math.cos(angle)*138,y:work.y+Math.sin(angle)*138});});
+    const capacities=[12,18,24,30];let offset=0,ring=0;
+    while(offset<patrons.length){const capacity=capacities[Math.min(ring,capacities.length-1)];const count=Math.min(capacity,patrons.length-offset);const radius=190+ring*72;for(let i=0;i<count;i++){const entry=patrons[offset+i];const angle=-Math.PI/2+(i/count)*Math.PI*2+(ring%2)*Math.PI/count;targets.set(entry.person.id,{x:work.x+Math.cos(angle)*radius,y:work.y+Math.sin(angle)*radius});}offset+=count;ring++;}
+    return targets;
+  }
+  function focusTargetsForPerson(person){
+    const targets=new Map();for(const node of state.nodes.values())targets.set(node.id,{x:node.x,y:node.y});
+    const works=connectedWorkIds(person.id).map(id=>state.nodes.get(id)).filter(Boolean);const radius=Math.max(170,130+works.length*11);
+    works.forEach((work,i)=>{const angle=-Math.PI/2+(i/Math.max(1,works.length))*Math.PI*2;targets.set(work.id,{x:person.x+Math.cos(angle)*radius,y:person.y+Math.sin(angle)*radius});});
+    targets.set(person.id,{x:person.x,y:person.y});return targets;
+  }
+
+  function beginPositionTween(targets,duration=560,fromOverrides=new Map()){
+    const from=new Map(),to=new Map();
+    for(const node of state.nodes.values()){
+      const override=fromOverrides.get(node.id);from.set(node.id,override||{x:node.displayX??node.x,y:node.displayY??node.y});
+      to.set(node.id,targets.get(node.id)||{x:node.x,y:node.y});
+    }
+    state.positionTween={start:performance.now(),duration,from,to};
+  }
+  function updatePositionTween(now){
+    const tween=state.positionTween;if(!tween)return;
+    const t=clamp((now-tween.start)/tween.duration,0,1),e=easeInOutCubic(t);
+    for(const node of state.nodes.values()){
+      const a=tween.from.get(node.id)||{x:node.x,y:node.y},b=tween.to.get(node.id)||{x:node.x,y:node.y};
+      node.displayX=a.x+(b.x-a.x)*e;node.displayY=a.y+(b.y-a.y)*e;
+    }
+    if(t>=1)state.positionTween=null;
+  }
+  function animateCamera(target,duration=520,immediate=false){
+    if(immediate){state.camera={...target};state.cameraTween=null;return;}
+    state.cameraTween={start:performance.now(),duration,from:{...state.camera},to:{...target}};
+  }
+  function updateCameraTween(now){
+    const tween=state.cameraTween;if(!tween)return;
+    const t=clamp((now-tween.start)/tween.duration,0,1),e=easeInOutCubic(t);
+    state.camera.x=tween.from.x+(tween.to.x-tween.from.x)*e;state.camera.y=tween.from.y+(tween.to.y-tween.from.y)*e;state.camera.zoom=tween.from.zoom+(tween.to.zoom-tween.from.zoom)*e;
+    if(t>=1)state.cameraTween=null;
+  }
+
+  function visibleNodesForCurrentView(){return [...state.nodes.values()].filter(nodeVisible);}
+  function fitNodes(nodes,{padding=180,minZoom=.12,maxZoom=1.55}={}){
+    if(!nodes.length)return {...state.camera};let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    for(const node of nodes){const x=node.displayX??node.x,y=node.displayY??node.y;minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}
+    const rect=canvas.getBoundingClientRect(),width=Math.max(260,maxX-minX+padding),height=Math.max(260,maxY-minY+padding);
+    return {x:(minX+maxX)/2,y:(minY+maxY)/2,zoom:clamp(Math.min(rect.width/width,rect.height/height),minZoom,maxZoom)};
+  }
+
+function fitBounds(bounds,{padding=160,minZoom=.12,maxZoom=1.55}={}){
+  if(!bounds||!Number.isFinite(bounds.minX))return {...state.camera};
+  const rect=canvas.getBoundingClientRect();
+  const width=Math.max(260,bounds.maxX-bounds.minX+padding),height=Math.max(260,bounds.maxY-bounds.minY+padding);
+  return {x:(bounds.minX+bounds.maxX)/2,y:(bounds.minY+bounds.maxY)/2,zoom:clamp(Math.min(rect.width/width,rect.height/height),minZoom,maxZoom)};
+}
+function overviewBounds(){
+  const bounds={minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity};
+  for(const node of personNodes().filter(n=>rolesOf(n).has('artist'))){bounds.minX=Math.min(bounds.minX,node.x-70);bounds.maxX=Math.max(bounds.maxX,node.x+70);bounds.minY=Math.min(bounds.minY,node.y-70);bounds.maxY=Math.max(bounds.maxY,node.y+70);}
+  for(const group of state.groups.values())if(group.card){bounds.minX=Math.min(bounds.minX,group.card.x);bounds.maxX=Math.max(bounds.maxX,group.card.x+group.card.w);bounds.minY=Math.min(bounds.minY,group.card.y);bounds.maxY=Math.max(bounds.maxY,group.card.y+group.card.h);}
+  return bounds;
+}
+function fitOverview(immediate=false){
+  const target=fitBounds(overviewBounds(),{padding:250,minZoom:.10,maxZoom:1.18});
+  state.overviewCamera=target;animateCamera(target,560,immediate);
+}
+function fitCollection(group,immediate=false){
+  if(!group)return;
+  const nodes=groupWorks(group).map(n=>({displayX:n.x,displayY:n.y}));const artist=state.nodes.get(group.artistId);if(artist)nodes.push({displayX:artist.x,displayY:artist.y});
+  const target=fitNodes(nodes,{padding:260,minZoom:.16,maxZoom:1.46});animateCamera(target,540,immediate);
+}
+function focusCameraFor(node,immediate=false,targetMap=null){
+  if(!node)return;
+  let nodes=[node];
+  const targets=targetMap||(node.type==='work'?focusTargetsForWork(node):node.type==='person'?focusTargetsForPerson(node):null);
+  if(node.type==='work')nodes=[node,...relationPeople(node.id).map(x=>x.person).filter(nodeVisible)];
+  else if(node.type==='person')nodes=[node,...connectedWorkIds(node.id).map(id=>state.nodes.get(id)).filter(Boolean)];
+  const projected=nodes.map(n=>{const p=targets?.get(n.id)||{x:n.displayX??n.x,y:n.displayY??n.y};return{displayX:p.x,displayY:p.y};});
+  const target=fitNodes(projected,{padding:210,minZoom:.42,maxZoom:1.72});animateCamera(target,540,immediate);
+}
+function fitCurrentView(){
+  if(state.viewMode==='overview')return fitOverview(false);
+  if(state.viewMode==='focus-collection')return fitCollection(selectedGroup(),false);
+  const node=selectedNode();if(node)focusCameraFor(node,false);
+}
+function syncToolbar(){
+  const peopleMode=state.viewMode==='focus-work'||state.viewMode==='focus-person';
+  winnerFilter.hidden=!peopleMode;patronFilter.hidden=!peopleMode;
+  backBtn.disabled=state.viewMode==='overview';
+  originBtn.classList.toggle('active',state.viewMode==='overview');
+}
+function enterCollectionFocus(group,immediate=false){
+  if(!group)return;
+  state.viewMode='focus-collection';state.selectedGroupId=group.id;state.selectedId=null;state.focusContextId=group.id;
+  state.returnView={mode:'overview'};
+  const targets=new Map([...state.nodes.values()].map(n=>[n.id,{x:n.x,y:n.y}]));beginPositionTween(targets,420);
+  const artist=state.nodes.get(group.artistId);
+  mapCrumb.textContent=`${artist?.label||'Artist'} / Collection`;
+  mapTitle.textContent=group.name;
+  const stats=groupStats(group);mapSubtitle.textContent=`${stats.works} verified works · select an artwork to reveal its people`;
+  showCollectionInspector(group);syncToolbar();requestAnimationFrame(()=>fitCollection(group,immediate));
+}
+function enterFocus(node){
+  if(!node)return;
+  const previousMode=state.viewMode,previousGroup=state.selectedGroupId,previousNodeId=state.selectedId;
+  state.selectedId=node.id;state.focusContextId=node.id;
+  if(node.type==='work'){
+    state.returnView={mode:'focus-collection',groupId:node.metadata.groupId};
+    state.selectedGroupId=node.metadata.groupId;state.viewMode='focus-work';
+    const targets=focusTargetsForWork(node),fromOverrides=new Map(),cluster=aggregatePosition(node);
+    for(const entry of relationPeople(node.id))if(entry.role==='patron')fromOverrides.set(entry.person.id,cluster);
+    beginPositionTween(targets,580,fromOverrides);
+    mapCrumb.textContent=`${state.groups.get(node.metadata.groupId)?.name||'Collection'} / Artwork`;
+    mapTitle.textContent=node.label;mapSubtitle.textContent='Focused relationship · winner and patrons';
+    requestAnimationFrame(()=>focusCameraFor(node,false,targets));
+  }else if(node.type==='person'&&!rolesOf(node).has('artist')){
+    state.returnView={mode:previousMode,groupId:previousGroup,nodeId:previousNodeId};state.viewMode='focus-person';
+    const targets=focusTargetsForPerson(node);beginPositionTween(targets,540);
+    mapCrumb.textContent='Relationship / Person';mapTitle.textContent=node.label;mapSubtitle.textContent='Connected artworks across the atlas';
+    requestAnimationFrame(()=>focusCameraFor(node,false,targets));
+  }else{
+    return exitFocus(true);
+  }
+  showInspector(node);syncToolbar();
+}
+function exitFocus(showOverview=true){
+  const targets=new Map([...state.nodes.values()].map(n=>[n.id,{x:n.x,y:n.y}]));beginPositionTween(targets,460);
+  state.viewMode='overview';state.focusContextId=null;state.selectedId=null;state.selectedGroupId=null;state.returnView=null;
+  const artist=state.nodes.get(state.seedId);mapCrumb.textContent='Profile overview';mapTitle.textContent=artist?.label||'Professional Atlas';mapSubtitle.textContent='Collection atlas · select a collection, then an artwork';
+  if(showOverview)showInspector(null);syncToolbar();animateCamera(state.overviewCamera||fitBounds(overviewBounds()),520,false);
+}
+function goBack(){
+  if(state.viewMode==='focus-work'){
+    const group=state.groups.get(state.selectedGroupId||selectedNode()?.metadata.groupId);if(group)return enterCollectionFocus(group,false);
+  }
+  if(state.viewMode==='focus-person'&&state.returnView?.mode==='focus-work'){
+    const work=state.nodes.get(state.returnView.nodeId);if(work)return enterFocus(work);
+  }
+  if(state.viewMode==='focus-person'&&state.returnView?.mode==='focus-collection'){
+    const group=state.groups.get(state.returnView.groupId);if(group)return enterCollectionFocus(group,false);
+  }
+  if(state.viewMode==='focus-collection'||state.viewMode==='focus-person')return exitFocus(true);
+}
+function selectNode(node){if(!node){if(state.viewMode==='overview')return;return goBack();}enterFocus(node);}
+function resizeCanvas(){
+  const dpr=Math.min(window.devicePixelRatio||1,2),rect=canvas.getBoundingClientRect();
+  canvas.width=Math.max(1,Math.round(rect.width*dpr));canvas.height=Math.max(1,Math.round(rect.height*dpr));ctx.setTransform(dpr,0,0,dpr,0,0);
+  if(state.started){
+    const aspect=clamp(rect.width/Math.max(1,rect.height),.75,3.2);
+    if(Math.abs(aspect-state.lastAspect)>.18){layoutGraph();if(state.viewMode==='overview')fitOverview(true);else if(state.viewMode==='focus-collection')fitCollection(selectedGroup(),true);else{const node=selectedNode();if(node)focusCameraFor(node,true);}}
+  }
+}
+
+  function worldToScreen(x,y,depth=.5){
+    const r=canvas.getBoundingClientRect();const parallax=(depth-.5)*6;
+    return{x:(x-state.camera.x)*state.camera.zoom+r.width/2+parallax,y:(y-state.camera.y)*state.camera.zoom+r.height/2-parallax*.45};
+  }
+  function screenToWorld(x,y){const r=canvas.getBoundingClientRect();return{x:(x-r.width/2)/state.camera.zoom+state.camera.x,y:(y-r.height/2)/state.camera.zoom+state.camera.y};}
+
+  function neighborhood(id){const set=new Set([id]);for(const e of state.edges.values()){if(e.source===id)set.add(e.target);if(e.target===id)set.add(e.source);}return set;}
+
+function visualAlpha(node){
+  if(!nodeVisible(node))return 0;
+  if(state.viewMode==='overview')return node.id===state.hoveredId?1:.96;
+  if(state.viewMode==='focus-collection')return node.id===state.hoveredId?1:.96;
+  const selected=selectedNode();
+  if(!selected)return 1;
+  if(state.viewMode==='focus-work'){
+    if(node.id===selected.id)return 1;
+    if(node.type==='person'&&relatedToWork(node.id,selected.id))return 1;
+    return .055;
+  }
+  if(state.viewMode==='focus-person'){
+    if(node.id===selected.id||connectedWorkIds(selected.id).includes(node.id))return 1;
+    if(node.type==='person'&&rolesOf(node).has('artist'))return .10;
+    return .045;
+  }
+  return 1;
+}
+function edgeAlpha(edge){
+  if(!edgeVisible(edge))return 0;
+  const selected=selectedNode();
+  if(state.viewMode==='overview')return edge.type==='network'?.18:0;
+  if(state.viewMode==='focus-work')return edge.source===selected?.id||edge.target===selected?.id?1:.025;
+  if(state.viewMode==='focus-person')return edge.source===selected?.id||edge.target===selected?.id?1:.02;
+  return 0;
+}
+
+  function drawGrid(rect){const spacing=210*state.camera.zoom;if(spacing<38)return;const ox=((-state.camera.x*state.camera.zoom+rect.width/2)%spacing+spacing)%spacing,oy=((-state.camera.y*state.camera.zoom+rect.height/2)%spacing+spacing)%spacing;ctx.strokeStyle='rgba(255,255,255,.014)';ctx.lineWidth=1;ctx.beginPath();for(let x=ox;x<rect.width;x+=spacing){ctx.moveTo(x,0);ctx.lineTo(x,rect.height);}for(let y=oy;y<rect.height;y+=spacing){ctx.moveTo(0,y);ctx.lineTo(rect.width,y);}ctx.stroke();}
+  function roundRectPath(x,y,w,h,r){const rr=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+rr,y);ctx.arcTo(x+w,y,x+w,y+h,rr);ctx.arcTo(x+w,y+h,x,y+h,rr);ctx.arcTo(x,y+h,x,y,rr);ctx.arcTo(x,y,x+w,y,rr);ctx.closePath();}
+  function drawImageContain(image,x,y,w,h){const iw=image.naturalWidth||w,ih=image.naturalHeight||h;const scale=Math.min(w/iw,h/ih);const dw=iw*scale,dh=ih*scale;ctx.drawImage(image,x+(w-dw)/2,y+(h-dh)/2,dw,dh);}
+  function drawImageCover(image,x,y,w,h){const iw=image.naturalWidth||w,ih=image.naturalHeight||h;const scale=Math.max(w/iw,h/ih);const dw=iw*scale,dh=ih*scale;ctx.drawImage(image,x+(w-dw)/2,y+(h-dh)/2,dw,dh);}
+
+
+function drawGroups(){
+  if(state.viewMode==='overview')return;
+  const group=state.viewMode==='focus-collection'?selectedGroup():state.groups.get(selectedNode()?.metadata?.groupId);
+  if(!group?.bounds)return;
+  const b=group.bounds,p=worldToScreen(b.x,b.y,.18),w=b.w*state.camera.zoom,h=b.h*state.camera.zoom;if(w<24||h<24)return;
+  const accent=groupAccent(group,.32);
+  ctx.save();ctx.globalAlpha=state.viewMode==='focus-collection'?.92:.18;
+  roundRectPath(p.x,p.y,w,h,18);ctx.fillStyle='rgba(12,14,19,.34)';ctx.fill();ctx.strokeStyle=accent;ctx.lineWidth=1;ctx.setLineDash([6,9]);ctx.stroke();ctx.setLineDash([]);
+  if(state.viewMode==='focus-collection'&&state.camera.zoom>.28){ctx.font='650 10px Inter,system-ui';ctx.fillStyle=groupAccent(group,.78);ctx.textAlign='left';ctx.textBaseline='bottom';ctx.fillText(`${group.name} · ${group.workIds.length} works`,p.x+14,p.y-9,360);}ctx.restore();
+}
+
+function curve(a,b,bendSeed,alpha,color,width){
+  const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1,mx=(a.x+b.x)/2,my=(a.y+b.y)/2,bend=(rnd(bendSeed)-.5)*24*clamp(state.camera.zoom,.55,1.35);
+  ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.quadraticCurveTo(mx-dy/d*bend,my+dx/d*bend,b.x,b.y);ctx.stroke();ctx.restore();
+}
+function drawGroupBridges(){
+  if(state.viewMode!=='overview')return;
+  const groups=[...state.groups.values()].filter(g=>g.card);
+  for(let i=0;i<groups.length;i++)for(let j=i+1;j<groups.length;j++){
+    const a=groups[i],b=groups[j],count=groupSharedCount(a,b);if(!count)continue;
+    const p=worldToScreen(a.cx,a.cy,.24),q=worldToScreen(b.cx,b.cy,.24);
+    const alpha=clamp(.035+Math.log2(count+1)*.022,.04,.15),width=clamp(.55+Math.log2(count+1)*.32,.7,2.2);
+    curve(p,q,`shared:${a.id}:${b.id}`,alpha,'rgba(115,217,173,.72)',width);
+  }
+}
+function drawCollectionBundles(){
+  if(state.viewMode==='overview'){
+    for(const group of state.groups.values()){
+      const artist=state.nodes.get(group.artistId);if(!artist||!group.card)continue;
+      const a=worldToScreen(artist.displayX,artist.displayY,nodeDepth(artist)),b=worldToScreen(group.cx,group.cy,.28);
+      const hovered=state.hoveredGroupId===group.id;curve(a,b,`trunk:${group.id}`,hovered?.42:.18,groupAccent(group,.92),hovered?1.75:1.05);
+    }
+    return;
+  }
+  const group=state.viewMode==='focus-collection'?selectedGroup():state.groups.get(selectedNode()?.metadata?.groupId);if(!group)return;
+  const artist=state.nodes.get(group.artistId);if(!artist)return;
+  const hub=worldToScreen(group.hubX,group.hubY,.30),a=worldToScreen(artist.displayX,artist.displayY,nodeDepth(artist));
+  const collectionMode=state.viewMode==='focus-collection';curve(a,hub,`trunk:${group.id}`,collectionMode?.32:.10,groupAccent(group,.88),collectionMode?1.45:1.0);
+  if(collectionMode){
+    for(const id of group.workIds){const work=state.nodes.get(id);if(!work)continue;const w=worldToScreen(work.displayX,work.displayY,nodeDepth(work));curve(hub,w,`branch:${id}`,.07,groupAccent(group,.58),.65);}
+  }
+}
+function drawRelationshipEdges(){
+  if(state.viewMode!=='focus-work'&&state.viewMode!=='focus-person')return;
+  ctx.lineCap='round';
+  for(const edge of state.edges.values()){
+    if(edge.type==='created'||edge.type==='network')continue;const alpha=edgeAlpha(edge);if(alpha<=0)continue;
+    const aNode=state.nodes.get(edge.source),bNode=state.nodes.get(edge.target);if(!aNode||!bNode)continue;
+    const a=worldToScreen(aNode.displayX,aNode.displayY,nodeDepth(aNode)),b=worldToScreen(bNode.displayX,bNode.displayY,nodeDepth(bNode));
+    const active=state.selectedId&&(edge.source===state.selectedId||edge.target===state.selectedId);
+    curve(a,b,edge.id,alpha,edgePalette[edge.type]||'rgba(155,223,255,.36)',active?(edge.type==='winner'?2.3:1.8):(edge.type==='winner'?1.35:.85));
+    if(active){const phase=((state.frameNow*.00032+rnd(edge.id))%1),x=a.x+(b.x-a.x)*phase,y=a.y+(b.y-a.y)*phase;ctx.save();ctx.globalAlpha=.65;ctx.fillStyle=edge.type==='winner'?palette.winner:palette.patron;ctx.beginPath();ctx.arc(x,y,2.1,0,Math.PI*2);ctx.fill();ctx.restore();}
+  }
+}
+function drawOverviewCollectionCards(){
+  state.groupHits=[];if(state.viewMode!=='overview')return;
+  const zoom=state.camera.zoom;
+  for(const group of state.groups.values()){
+    if(!group.card)continue;
+    const c=group.card,p=worldToScreen(c.x,c.y,.22),w=c.w*zoom,h=c.h*zoom;if(w<56||h<42)continue;
+    const hovered=state.hoveredGroupId===group.id,accent=groupAccent(group,hovered?.78:.48),stats=groupStats(group);
+    ctx.save();
+    ctx.globalAlpha=.38;ctx.fillStyle='#000';roundRectPath(p.x+8,p.y+10,w,h,18);ctx.fill();
+    ctx.globalAlpha=1;roundRectPath(p.x,p.y,w,h,18);ctx.fillStyle=hovered?'rgba(18,22,29,.97)':'rgba(10,12,17,.94)';ctx.fill();ctx.strokeStyle=accent;ctx.lineWidth=hovered?1.6:1;ctx.stroke();
+    const headerH=clamp(48*zoom,26,48),footerH=clamp(39*zoom,22,39),pad=clamp(14*zoom,8,14);
+    ctx.fillStyle=groupAccent(group,.055);roundRectPath(p.x+1,p.y+1,w-2,headerH,17);ctx.fill();
+    ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillStyle=hovered?'#fff':'rgba(239,242,247,.90)';ctx.font=`650 ${clamp(12*zoom,8,12)}px Inter,system-ui`;ctx.fillText(group.name,p.x+pad,p.y+headerH*.47,Math.max(60,w-pad*2-60));
+    ctx.textAlign='right';ctx.fillStyle='rgba(155,223,255,.74)';ctx.font=`600 ${clamp(9*zoom,7,9)}px ui-monospace,monospace`;ctx.fillText(`${stats.works} works`,p.x+w-pad,p.y+headerH*.47);
+    const works=groupWorks(group),preview=works.slice(0,6),cols=3,rows=2;
+    const gridX=p.x+pad,gridY=p.y+headerH+pad*.45,gridW=w-pad*2,gridH=h-headerH-footerH-pad*1.2,gap=clamp(7*zoom,3,7),cellW=(gridW-gap*(cols-1))/cols,cellH=(gridH-gap*(rows-1))/rows;
+    preview.forEach((work,i)=>{const col=i%cols,row=Math.floor(i/cols),x=gridX+col*(cellW+gap),y=gridY+row*(cellH+gap);roundRectPath(x,y,cellW,cellH,7);ctx.fillStyle='rgba(255,255,255,.025)';ctx.fill();ctx.strokeStyle='rgba(255,255,255,.065)';ctx.lineWidth=.8;ctx.stroke();const res=imageResource(work.metadata.thumbnail||work.metadata.detail?.thumbnail);if(res?.ready){ctx.save();roundRectPath(x+1,y+1,cellW-2,cellH-2,6);ctx.clip();drawImageContain(res.image,x+4,y+4,cellW-8,cellH-8);ctx.restore();}});
+    if(works.length>6){const extra=works.length-6;ctx.fillStyle='rgba(6,7,9,.80)';roundRectPath(gridX+gridW-48,gridY+gridH-22,42,17,8);ctx.fill();ctx.fillStyle='rgba(255,255,255,.78)';ctx.font=`650 ${clamp(8*zoom,7,9)}px Inter,system-ui`;ctx.textAlign='center';ctx.fillText(`+${extra}`,gridX+gridW-27,gridY+gridH-13);}
+    ctx.strokeStyle='rgba(255,255,255,.055)';ctx.beginPath();ctx.moveTo(p.x+pad,p.y+h-footerH);ctx.lineTo(p.x+w-pad,p.y+h-footerH);ctx.stroke();
+    ctx.font=`560 ${clamp(8.5*zoom,7,9)}px Inter,system-ui`;ctx.textAlign='left';ctx.fillStyle='rgba(185,191,202,.78)';ctx.fillText(`${stats.winners} winners  ·  ${stats.patrons} patrons`,p.x+pad,p.y+h-footerH*.48);
+    ctx.textAlign='right';ctx.fillStyle=hovered?'rgba(155,223,255,.92)':'rgba(155,223,255,.58)';ctx.fillText('Open collection →',p.x+w-pad,p.y+h-footerH*.48);
+    ctx.restore();state.groupHits.push({groupId:group.id,x:p.x,y:p.y,w,h});
+  }
+}
+function drawCollectionWorkMetrics(node,p,r,alpha){
+  if(state.viewMode!=='focus-collection')return;const stats=relationshipStats(node.id);if(!stats.total)return;
+  ctx.save();ctx.globalAlpha=alpha;ctx.font='650 8px Inter,system-ui';
+  if(stats.winners&&state.filters.winners){ctx.fillStyle=palette.winner;ctx.beginPath();ctx.arc(p.x-r+5,p.y-r+5,3.2,0,Math.PI*2);ctx.fill();}
+  if(stats.patrons&&state.filters.patrons){const label=String(stats.patrons),width=Math.max(16,ctx.measureText(label).width+9);roundRectPath(p.x+r-width+2,p.y-r-1,width,15,8);ctx.fillStyle='rgba(8,12,13,.94)';ctx.fill();ctx.strokeStyle='rgba(115,217,173,.44)';ctx.lineWidth=1;ctx.stroke();ctx.fillStyle='#bdf4db';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,p.x+r-width/2+2,p.y-r+6.5);}
+  ctx.restore();
+}
+
+function drawPerson(node,p,r,alpha,active){
+    const depth=nodeDepth(node),shadow=2+depth*5,roles=rolesOf(node);
+    if(state.viewMode==='overview'&&roles.has('artist')){ctx.save();const g=ctx.createRadialGradient(p.x,p.y,r*.4,p.x,p.y,r+26);g.addColorStop(0,'rgba(155,223,255,.13)');g.addColorStop(1,'rgba(155,223,255,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(p.x,p.y,r+26,0,Math.PI*2);ctx.fill();ctx.restore();}
+    ctx.save();ctx.globalAlpha=alpha*.38;ctx.fillStyle='#000';ctx.beginPath();ctx.arc(p.x+shadow,p.y+shadow*.55,r+3,0,Math.PI*2);ctx.fill();ctx.restore();
+    ctx.save();ctx.globalAlpha=alpha;const resource=imageResource(personImageUrl(node));ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.clip();ctx.fillStyle='#fff';ctx.fillRect(p.x-r,p.y-r,r*2,r*2);if(resource?.ready){const isFallback=personImageUrl(node).startsWith('data:image/svg+xml');if(isFallback)drawImageContain(resource.image,p.x-r,p.y-r,r*2,r*2);else drawImageCover(resource.image,p.x-r,p.y-r,r*2,r*2);}ctx.restore();
+    const rings=[];if(roles.has('artist'))rings.push(palette.artist);if(roles.has('auctionWinner'))rings.push(palette.winner);if(roles.has('patron'))rings.push(palette.patron);
+    ctx.save();ctx.globalAlpha=alpha;rings.forEach((color,i)=>{ctx.strokeStyle=color;ctx.lineWidth=active?2.5:1.35;ctx.beginPath();ctx.arc(p.x,p.y,r+2.4+i*3.1,0,Math.PI*2);ctx.stroke();});ctx.restore();
+  }
+  function drawWork(node,p,r,alpha,active){
+    const resource=imageResource(node.metadata.thumbnail||node.metadata.detail?.thumbnail),depth=nodeDepth(node),shadow=3+depth*6;
+    ctx.save();ctx.globalAlpha=alpha*.42;ctx.fillStyle='#000';roundRectPath(p.x-r+shadow,p.y-r+shadow*.55,r*2,r*2,8);ctx.fill();ctx.restore();
+    ctx.save();ctx.globalAlpha=alpha;roundRectPath(p.x-r,p.y-r,r*2,r*2,7);ctx.clip();ctx.fillStyle='#0e1014';ctx.fillRect(p.x-r,p.y-r,r*2,r*2);if(resource?.ready)drawImageContain(resource.image,p.x-r+3,p.y-r+3,r*2-6,r*2-6);else{ctx.fillStyle='rgba(242,139,200,.72)';ctx.fillRect(p.x-r,p.y-r,r*2,r*2);}ctx.restore();
+    ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=active?'#fff':'rgba(242,139,200,.62)';ctx.lineWidth=active?2.35:1.15;roundRectPath(p.x-r,p.y-r,r*2,r*2,7);ctx.stroke();ctx.restore();
+    drawCollectionWorkMetrics(node,p,r,alpha);
+  }
+
+function labelAllowed(node,active){
+  if(state.labelMode==='none')return active;if(state.labelMode==='all')return true;if(active)return true;
+  if(state.viewMode==='overview')return node.type==='person'&&rolesOf(node).has('artist');
+  if(state.viewMode==='focus-collection')return node.type==='work'&&state.camera.zoom>.78;
+  return visualAlpha(node)>.7&&(node.type==='work'||state.camera.zoom>.82);
+}
+  function drawLabel(node,p,r,alpha,active){
+    if(!labelAllowed(node,active))return;const text=node.label||'';ctx.save();ctx.globalAlpha=Math.max(alpha,active?1:0);ctx.font=`${active?650:540} ${active?11:9}px Inter,system-ui`;ctx.textAlign='center';ctx.textBaseline='top';const maxWidth=node.type==='work'?190:160,width=Math.min(maxWidth,ctx.measureText(text).width+12),y=p.y+r+8;roundRectPath(p.x-width/2,y-2,width,15,5);ctx.fillStyle=active?'rgba(11,13,17,.94)':'rgba(6,7,9,.72)';ctx.fill();ctx.fillStyle=active?'#fff':'rgba(231,234,240,.80)';ctx.fillText(text,p.x,y,maxWidth-8);ctx.restore();
+  }
+
+
+function draw(){
+  const rect=canvas.getBoundingClientRect();ctx.fillStyle=palette.bg;ctx.fillRect(0,0,rect.width,rect.height);drawGrid(rect);
+  drawGroupBridges();drawCollectionBundles();drawOverviewCollectionCards();drawGroups();drawRelationshipEdges();
+  state.drawOrder=computeDrawOrder();
+  for(const node of state.drawOrder){
+    const alpha=visualAlpha(node);if(alpha<=0)continue;
+    const p=worldToScreen(node.displayX,node.displayY,nodeDepth(node)),r=screenRadius(node);if(p.x<-120||p.y<-120||p.x>rect.width+120||p.y>rect.height+120)continue;
+    const active=node.id===state.selectedId||node.id===state.hoveredId;
+    if(active){ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=node.id===state.selectedId?'rgba(155,223,255,.98)':'rgba(255,255,255,.38)';ctx.lineWidth=node.id===state.selectedId?2:1;ctx.beginPath();ctx.arc(p.x,p.y,r+10,0,Math.PI*2);ctx.stroke();ctx.restore();}
+    if(node.type==='work')drawWork(node,p,r,alpha,active);else drawPerson(node,p,r,alpha,active);drawLabel(node,p,r,alpha,active);
+  }
+}
+function groupAtScreen(x,y){
+  if(state.viewMode!=='overview')return null;
+  for(let i=state.groupHits.length-1;i>=0;i--){const hit=state.groupHits[i];if(x>=hit.x&&x<=hit.x+hit.w&&y>=hit.y&&y<=hit.y+hit.h)return state.groups.get(hit.groupId)||null;}
+  return null;
+}
+function nodeAtScreen(x,y){
+  const order=[...state.drawOrder].reverse();for(const node of order){if(!nodeVisible(node))continue;const p=worldToScreen(node.displayX,node.displayY,nodeDepth(node)),r=screenRadius(node)+10;if(Math.hypot(p.x-x,p.y-y)<=r)return node;}return null;
+}
+function sourceUrl(node){if(node.type==='person')return `https://networked.art/${encodeURIComponent(node.metadata.account||node.metadata.address)}/artist`;return `https://networked.art/${encodeURIComponent(node.metadata.routeAccount||node.metadata.creatorAddress||'')}/${node.metadata.contract}/${node.metadata.tokenId}`;}
+  function roleLabel(role){return role==='artist'?'Artist':role==='auctionWinner'?'Auction winner':role==='patron'?'Patron':role;}
+
+  
+
+function renderOverview(){
+  if(!overview.classList.contains('visible'))return;const artist=state.nodes.get(state.seedId);
+  if(!artist){overview.innerHTML=`<div class="overview-card"><div class="copy"><span class="type-label">Professional atlas</span><h2 class="title">Collections first</h2><p class="description">Load a Networked.art artist to browse a clean collection-level atlas. Enter a collection to inspect its works, then select an artwork to reveal the complete winner and patron constellation.</p><div class="hint">The global view intentionally avoids raw graph clutter. Nothing is removed from the data; detail appears at the scale where it becomes readable.</div></div></div>`;return;}
+  const groups=[...state.groups.values()].filter(g=>g.artistId===artist.id).sort((a,b)=>b.workIds.length-a.workIds.length||a.name.localeCompare(b.name));
+  overview.innerHTML=`<div class="overview-card"><div class="hero-media person"><img src="${escapeHtml(personImageUrl(artist))}" alt="${escapeHtml(artist.label)} glyph"></div><div class="copy"><div class="topline"><span class="type-label">Profile overview</span><div class="badges"><span class="badge artist">Artist</span></div></div><h2 class="title">${escapeHtml(artist.label)}</h2><p class="subtitle">${escapeHtml(artist.metadata.address||artist.subtitle||'')}</p>${artist.metadata.bio?`<p class="description">${escapeHtml(artist.metadata.bio)}</p>`:''}<div class="overview-grid"><div class="overview-stat"><strong>${groups.length}</strong><span>Collections</span></div><div class="overview-stat"><strong>${countEls.work.textContent}</strong><span>Verified works</span></div><div class="overview-stat"><strong>${countEls.winner.textContent}</strong><span>Auction winners</span></div><div class="overview-stat"><strong>${countEls.patron.textContent}</strong><span>Patrons</span></div></div><div class="hint"><strong>Three scales, one map.</strong><br>Open a collection card to browse its works. Select an artwork to unfold every individual relationship. Right-click people or artworks for direct actions.</div>${groups.length?`<section class="relation-section"><h3>Collections</h3><div class="relation-list">${groups.map(collectionRow).join('')}</div></section>`:''}</div></div>`;
+  bindCollectionRows();
+}
+function collectionRow(group){const work=groupWorks(group)[0],thumb=work?.metadata.thumbnail||work?.metadata.detail?.thumbnail||'',stats=groupStats(group);return `<button class="relation-row" type="button" data-group-id="${escapeHtml(group.id)}">${thumb?`<img class="relation-avatar" style="border-radius:7px;image-rendering:auto;background:#111" src="${escapeHtml(thumb)}" alt="">`:`<span class="relation-avatar" style="border-radius:7px;background:rgba(193,178,255,.16)"></span>`}<span class="relation-copy"><strong>${escapeHtml(group.name)}</strong><span>${stats.works} works · ${stats.patrons} patrons</span></span><span class="relation-role">Open</span></button>`;}
+function bindCollectionRows(){for(const row of overview.querySelectorAll('[data-group-id]'))row.addEventListener('click',()=>{const group=state.groups.get(row.dataset.groupId);if(group)enterCollectionFocus(group,false);});}
+function showCollectionInspector(group){
+  if(!group)return;overview.classList.remove('visible');inspectCard.classList.add('visible');heroMedia.classList.remove('person');inspectImage.hidden=true;inspectImage.removeAttribute('src');mediaPlaceholder.hidden=true;collectionMosaic.hidden=false;collectionMosaic.innerHTML='';roleBadges.innerHTML='<span class="badge artist">Collection</span>';inspectDescription.hidden=true;inspectDescription.textContent='';relationSection.hidden=true;relationList.innerHTML='';expandPersonBtn.hidden=true;focusBtn.hidden=false;focusBtn.textContent='Fit collection';sourceBtn.textContent='Open contract';inspectType.textContent='Verified collection';inspectTitle.textContent=group.name;inspectSubtitle.textContent=group.address||group.id;
+  const works=groupWorks(group),stats=groupStats(group);for(const work of works.slice(0,4)){const thumb=work.metadata.thumbnail||work.metadata.detail?.thumbnail;if(thumb)collectionMosaic.insertAdjacentHTML('beforeend',`<img src="${escapeHtml(thumb)}" alt="${escapeHtml(work.label)}">`);}
+  if(!collectionMosaic.children.length){collectionMosaic.hidden=true;mediaPlaceholder.hidden=false;}
+  const facts=[['Contract',group.address||'—'],['Verified works',String(stats.works)],['Auction winners',String(stats.winners)],['Patrons',String(stats.patrons)],['Protocol',group.metadata?.protocol||'custom / legacy'],['Provenance','Networked artist collections API']];inspectFacts.innerHTML=facts.map(([k,v])=>`<div class="fact"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('');
+  const visible=works.slice(0,30);if(visible.length){relationTitle.textContent=`Artworks · ${works.length}`;relationList.innerHTML=visible.map(workRelationButton).join('')+(works.length>visible.length?`<div class="hint">${works.length-visible.length} additional works remain visible in the map.</div>`:'');relationSection.hidden=false;}bindRelationRows();
+}
+function relationButton(person,role){return `<button class="relation-row" type="button" data-node-id="${escapeHtml(person.id)}"><img class="relation-avatar" src="${escapeHtml(personImageUrl(person))}" alt=""><span class="relation-copy"><strong>${escapeHtml(person.label)}</strong><span>${escapeHtml(short(person.metadata.address||person.subtitle,8,6))}</span></span><span class="relation-role">${escapeHtml(role==='winner'?'Winner':'Patron')}</span></button>`;}
+  function workRelationButton(work){const thumb=work.metadata.thumbnail||work.metadata.detail?.thumbnail||'';return `<button class="relation-row" type="button" data-node-id="${escapeHtml(work.id)}">${thumb?`<img class="relation-avatar" style="border-radius:7px;image-rendering:auto;background:#111" src="${escapeHtml(thumb)}" alt="">`:`<span class="relation-avatar" style="border-radius:7px;background:var(--work)"></span>`}<span class="relation-copy"><strong>${escapeHtml(work.label)}</strong><span>${escapeHtml(work.metadata.collectionName||'Artwork')}</span></span><span class="relation-role">Work</span></button>`;}
+
+  async function showInspector(node){
+    if(!node){inspectCard.classList.remove('visible');overview.classList.add('visible');renderOverview();return;}
+    overview.classList.remove('visible');inspectCard.classList.add('visible');heroMedia.classList.toggle('person',node.type==='person');inspectImage.hidden=true;collectionMosaic.hidden=true;collectionMosaic.innerHTML='';mediaPlaceholder.hidden=true;inspectImage.removeAttribute('src');roleBadges.innerHTML='';inspectDescription.hidden=true;inspectDescription.textContent='';inspectFacts.innerHTML='';relationSection.hidden=true;relationList.innerHTML='';expandPersonBtn.hidden=true;focusBtn.hidden=false;focusBtn.textContent='Focus';sourceBtn.textContent='Open source';inspectType.textContent=node.type==='person'?'Person':'Artwork';inspectTitle.textContent=node.label;inspectSubtitle.textContent=node.subtitle||'';const facts=[];
+    if(node.type==='person'){
+      inspectImage.src=personImageUrl(node);inspectImage.hidden=false;const roles=[...rolesOf(node)];roleBadges.innerHTML=roles.map(role=>`<span class="badge ${role==='auctionWinner'?'winner':role}">${escapeHtml(roleLabel(role))}</span>`).join('');facts.push(['Address',node.metadata.address||'—']);if(node.metadata.handle)facts.push(['Handle',node.metadata.handle]);if(node.metadata.profile){facts.push(['Verified works',String(node.metadata.profile.works?.length||0)]);facts.push(['Collections',String(node.metadata.profile.collections?.length||0)]);}if(node.metadata.origin)facts.push(['Origin',node.metadata.origin]);if(node.metadata.year)facts.push(['Year',node.metadata.year]);if(node.metadata.bio){inspectDescription.textContent=node.metadata.bio;inspectDescription.hidden=false;}expandPersonBtn.hidden=node.expandedProfile;expandPersonBtn.textContent=node.loading?'Loading…':'Load artist network';const connected=connectedWorkIds(node.id).map(id=>state.nodes.get(id)).filter(Boolean);if(connected.length){relationTitle.textContent=`Connected artworks · ${connected.length}`;relationList.innerHTML=connected.map(workRelationButton).join('');relationSection.hidden=false;}
+    }else{
+      let detail=node.metadata.detail;if(!detail){inspectImage.hidden=true;mediaPlaceholder.hidden=false;try{detail=await ensureWorkDetail(node);}catch(error){log(`Detail ${node.label}: ${error.message}`,'error');}}
+      if(state.selectedId!==node.id)return;const thumb=node.metadata.thumbnail||detail?.thumbnail;if(thumb){inspectImage.src=thumb;inspectImage.hidden=false;mediaPlaceholder.hidden=true;}else mediaPlaceholder.hidden=false;inspectTitle.textContent=detail?.title||node.label;facts.push(['Token',node.metadata.tokenId]);facts.push(['Contract',node.metadata.contract]);facts.push(['Collection',node.metadata.collectionName||'—']);facts.push(['Auction status',detail?.auctionStatus||'—']);facts.push(['Auction winner',detail?.auctionWinner?.label||'—']);facts.push(['Patrons',String(detail?.patrons?.length||0)]);facts.push(['Provenance','Networked artist works API']);if(detail?.description){inspectDescription.textContent=detail.description;inspectDescription.hidden=false;}const people=relationPeople(node.id).sort((a,b)=>(a.role==='winner'?-1:1)-(b.role==='winner'?-1:1)||a.person.label.localeCompare(b.person.label));if(people.length){relationTitle.textContent=`People · ${people.length}`;relationList.innerHTML=people.map(x=>relationButton(x.person,x.role)).join('');relationSection.hidden=false;}
+    }
+    inspectFacts.innerHTML=facts.map(([k,v])=>`<div class="fact"><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('');bindRelationRows();
+  }
+  function bindRelationRows(){for(const row of relationList.querySelectorAll('[data-node-id]'))row.addEventListener('click',()=>{const node=state.nodes.get(row.dataset.nodeId);if(node)selectNode(node);});}
+
+
+function positionTooltip(event){const stage=canvas.getBoundingClientRect();let x=event.clientX-stage.left+14,y=event.clientY-stage.top+14;const maxX=stage.width-240,maxY=stage.height-70;x=Math.min(x,maxX);y=Math.min(y,maxY);tooltip.style.left=`${Math.max(8,x)}px`;tooltip.style.top=`${Math.max(8,y)}px`;tooltip.classList.add('visible');}
+function updateTooltipNode(node,event){if(!node){tooltip.classList.remove('visible');return;}tooltipTitle.textContent=node.label;tooltipMeta.textContent=node.type==='work'?(node.metadata.collectionName||'Artwork'):[...rolesOf(node)].map(roleLabel).join(' · ');positionTooltip(event);}
+function updateTooltipGroup(group,event){if(!group){tooltip.classList.remove('visible');return;}const stats=groupStats(group);tooltipTitle.textContent=group.name;tooltipMeta.textContent=`${stats.works} works · ${stats.winners} winners · ${stats.patrons} patrons`;positionTooltip(event);}
+
+canvas.addEventListener('pointerdown',event=>{hideContextMenu();canvas.setPointerCapture(event.pointerId);state.pointer={id:event.pointerId,startX:event.clientX,startY:event.clientY,cameraX:state.camera.x,cameraY:state.camera.y,dragging:false};state.cameraTween=null;});
+canvas.addEventListener('pointermove',event=>{
+  const rect=canvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top,group=groupAtScreen(x,y),node=group?null:nodeAtScreen(x,y);
+  state.hoveredGroupId=group?.id||null;state.hoveredId=node?.id||null;
+  if(group)updateTooltipGroup(group,event);else updateTooltipNode(node,event);
+  if(state.pointer){const dx=event.clientX-state.pointer.startX,dy=event.clientY-state.pointer.startY;if(!state.pointer.dragging&&Math.hypot(dx,dy)>5)state.pointer.dragging=true;if(state.pointer.dragging){state.camera.x=state.pointer.cameraX-dx/state.camera.zoom;state.camera.y=state.pointer.cameraY-dy/state.camera.zoom;tooltip.classList.remove('visible');}}
+  canvas.style.cursor=group||node?'pointer':state.pointer?.dragging?'grabbing':'grab';
+});
+canvas.addEventListener('pointerup',event=>{const pointer=state.pointer;state.pointer=null;if(!pointer||pointer.dragging)return;const rect=canvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top,group=groupAtScreen(x,y);if(group)return enterCollectionFocus(group,false);selectNode(nodeAtScreen(x,y));});
+canvas.addEventListener('pointercancel',()=>{state.pointer=null;});
+canvas.addEventListener('pointerleave',()=>{state.hoveredId=null;state.hoveredGroupId=null;tooltip.classList.remove('visible');});
+canvas.addEventListener('dblclick',async event=>{const rect=canvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top,group=groupAtScreen(x,y);if(group)return enterCollectionFocus(group,false);const node=nodeAtScreen(x,y);if(!node)return;selectNode(node);if(node.type==='person'&&!node.expandedProfile)await expandPersonNetwork(node);});
+canvas.addEventListener('wheel',event=>{event.preventDefault();hideContextMenu();const rect=canvas.getBoundingClientRect(),before=screenToWorld(event.clientX-rect.left,event.clientY-rect.top),factor=Math.exp(-event.deltaY*.00115);state.camera.zoom=clamp(state.camera.zoom*factor,.10,5);const after=screenToWorld(event.clientX-rect.left,event.clientY-rect.top);state.camera.x+=before.x-after.x;state.camera.y+=before.y-after.y;state.cameraTween=null;},{passive:false});
+canvas.addEventListener('contextmenu',event=>{event.preventDefault();const rect=canvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top,group=groupAtScreen(x,y);if(group)return showGroupContextMenu(group,event.clientX,event.clientY);showContextMenu(nodeAtScreen(x,y),event.clientX,event.clientY);});
+
+window.addEventListener('keydown',event=>{if(['INPUT','TEXTAREA','SELECT'].includes(event.target?.tagName))return;state.keys.add(event.key.toLowerCase());if(event.key==='Escape')goBack();if(event.key.toLowerCase()==='f')fitCurrentView();});
+window.addEventListener('keyup',event=>state.keys.delete(event.key.toLowerCase()));
+new ResizeObserver(()=>resizeCanvas()).observe(canvas.parentElement);
+
+  loadBtn.addEventListener('click',start);accountInput.addEventListener('keydown',event=>{if(event.key==='Enter')start();});
+
+  window.addEventListener('pointerdown',event=>{ if(contextMenu.classList.contains('visible') && !contextMenu.contains(event.target)) hideContextMenu(); }, true);
+
+contextMenu.addEventListener('click', async event=>{
+  const button=event.target.closest('button[data-action]');if(!button)return;
+  const action=button.dataset.action,group=state.groups.get(state.contextGroupId||''),node=state.nodes.get(state.contextNodeId||'');hideContextMenu();
+  if(group){
+    if(action==='focus-group')return enterCollectionFocus(group,false);
+    if(action==='fit-group')return animateCamera({x:group.cx,y:group.cy,zoom:Math.max(state.camera.zoom,.72)},420,false);
+    if(action==='open-contract')return window.open(`https://evm.now/address/${group.address}`,'_blank','noopener,noreferrer');
+    if(action==='copy-contract'){try{await navigator.clipboard.writeText(group.address||'');setStatus('live','Collection contract copied.');}catch{}return;}
+    return;
+  }
+  if(!node)return;
+  if(action==='focus'){selectNode(node);return;}
+  if(action==='center'){animateCamera({x:node.displayX??node.x,y:node.displayY??node.y,zoom:Math.max(state.camera.zoom,1.1)},420,false);return;}
+  if(action==='source'){window.open(sourceUrl(node),'_blank','noopener,noreferrer');return;}
+  if(action==='load-network'&&node.type==='person'&&!node.expandedProfile&&!node.loading){await expandPersonNetwork(node);return;}
+  if(action==='copy-address'){try{await navigator.clipboard.writeText(node.metadata.address||'');setStatus('live','Wallet address copied.');}catch{}return;}
+  if(action==='copy-id'){try{await navigator.clipboard.writeText(`${node.metadata.contract}:${node.metadata.tokenId}`);setStatus('live','Contract and token copied.');}catch{}return;}
+});
+  winnerFilter.addEventListener('click',()=>{state.filters.winners=!state.filters.winners;winnerFilter.classList.toggle('active',state.filters.winners);updateCounts();fitCurrentView();});
+  patronFilter.addEventListener('click',()=>{state.filters.patrons=!state.filters.patrons;patronFilter.classList.toggle('active',state.filters.patrons);updateCounts();fitCurrentView();renderOverview();});
+  labelModeBtn.addEventListener('click',()=>{state.labelMode=state.labelMode==='smart'?'all':state.labelMode==='all'?'none':'smart';labelModeBtn.textContent=`Labels: ${state.labelMode}`;});
+  backBtn.addEventListener('click',goBack);originBtn.addEventListener('click',()=>exitFocus(true));fitBtn.addEventListener('click',fitCurrentView);logBtn.addEventListener('click',()=>logPanel.classList.toggle('visible'));
+  focusBtn.addEventListener('click',()=>{const group=selectedGroup();if(state.viewMode==='focus-collection'&&group)return fitCollection(group,false);const node=selectedNode();if(node)enterFocus(node);});
+  expandPersonBtn.addEventListener('click',async()=>{const node=selectedNode();if(node)await expandPersonNetwork(node);});
+  sourceBtn.addEventListener('click',()=>{const group=selectedGroup();if(state.viewMode==='focus-collection'&&group)return window.open(`https://evm.now/address/${group.address}`,'_blank','noopener,noreferrer');const node=selectedNode();if(node)window.open(sourceUrl(node),'_blank','noopener,noreferrer');});
+
+  let previous=performance.now();
+  function frame(now){
+    state.frameNow=now;const dt=Math.min(.033,(now-previous)/1000||.016);previous=now;updatePositionTween(now);updateCameraTween(now);
+    const speed=520/state.camera.zoom*dt;
+    if(state.keys.has('w')||state.keys.has('arrowup')){state.camera.y-=speed;state.cameraTween=null;}
+    if(state.keys.has('s')||state.keys.has('arrowdown')){state.camera.y+=speed;state.cameraTween=null;}
+    if(state.keys.has('a')||state.keys.has('arrowleft')){state.camera.x-=speed;state.cameraTween=null;}
+    if(state.keys.has('d')||state.keys.has('arrowright')){state.camera.x+=speed;state.cameraTween=null;}
+    draw();requestAnimationFrame(frame);
+  }
+
+  resizeCanvas();clearWorld();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
