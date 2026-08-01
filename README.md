@@ -105,25 +105,6 @@ No additional packages are necessary.
 
 ---
 
-## Deployment
-
-```
-GitHub Pages
-        │
-        ▼
-Cloudflare Worker
-        │
-        ▼
-Networked.art Public API
-```
-
-Deployment instructions are available in:
-
-```
-docs/DEPLOYMENT.md
-```
-
----
 
 ## Data
 
