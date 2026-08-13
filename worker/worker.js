@@ -2,6 +2,11 @@ const UPSTREAM = 'https://api.networked.art';
 const PER_PAGE = 100;
 const MAX_PAGES = 50;
 const MAX_WORKS = 5000;
+const RATE_LIMIT_RETRY_AFTER = 60;
+const LOCAL_RATE_WINDOW_MS = RATE_LIMIT_RETRY_AFTER * 1000;
+const LOCAL_RATE_LIMITS = Object.freeze({ profile: 10, work: 1500 });
+const MAX_LOCAL_RATE_BUCKETS = 10000;
+const localRateBuckets = new Map();
 
 export default {
   async fetch(request, env, ctx) {
@@ -15,7 +20,13 @@ export default {
       let match = url.pathname.match(/^\/api\/networked\/profile\/([^/]+)\/works$/);
       if (match) {
         const account = validateAccount(decodeURIComponent(match[1]));
-        return cachedRoute(request, ctx, 120, () => buildProfileWorks(account));
+        return cachedRoute(
+          request,
+          ctx,
+          120,
+          'profile',
+          () => buildProfileWorks(account)
+        );
       }
 
       match = url.pathname.match(/^\/api\/networked\/work\/(0x[a-fA-F0-9]{40})\/([0-9]+)$/);
@@ -23,7 +34,13 @@ export default {
         const account = validateAccount(url.searchParams.get('account') || '');
         const collection = match[1].toLowerCase();
         const tokenId = match[2];
-        return cachedRoute(request, ctx, 60, () => getWorkDetail(account, collection, tokenId));
+        return cachedRoute(
+          request,
+          ctx,
+          60,
+          'work',
+          () => getWorkDetail(account, collection, tokenId)
+        );
       }
 
       return json({ error: 'Not found' }, 404);
@@ -33,15 +50,56 @@ export default {
   }
 };
 
-async function cachedRoute(request, ctx, maxAge, producer) {
+async function cachedRoute(request, ctx, maxAge, route, producer) {
   const cache = caches.default;
   const key = new Request(request.url, { method: 'GET' });
   const cached = await cache.match(key);
   if (cached) return cors(cached);
+
+  const limited = rateLimitMiss(request, route);
+  if (limited) return limited;
+
   const payload = await producer();
   const response = json(payload, 200, maxAge);
   ctx.waitUntil(cache.put(key, response.clone()));
   return response;
+}
+
+function rateLimitKey(request, route) {
+  const client = request.headers.get('CF-Connecting-IP') || 'unknown-client';
+  return `${route}:${client}`;
+}
+
+function rateLimitMiss(request, route) {
+  const key = rateLimitKey(request, route);
+  const now = Date.now();
+  const limit = LOCAL_RATE_LIMITS[route];
+  const current = localRateBuckets.get(key);
+
+  if (!current || now - current.startedAt >= LOCAL_RATE_WINDOW_MS) {
+    localRateBuckets.set(key, { startedAt: now, count: 1 });
+    trimLocalRateBuckets(now);
+    return null;
+  }
+
+  current.count += 1;
+  if (current.count <= limit) return null;
+  return json(
+    { error: 'Too many uncached requests. Please try again shortly.' },
+    429,
+    0,
+    { 'Retry-After': String(RATE_LIMIT_RETRY_AFTER) }
+  );
+}
+
+function trimLocalRateBuckets(now) {
+  if (localRateBuckets.size <= MAX_LOCAL_RATE_BUCKETS) return;
+  for (const [key, entry] of localRateBuckets) {
+    if (now - entry.startedAt >= LOCAL_RATE_WINDOW_MS) localRateBuckets.delete(key);
+  }
+  while (localRateBuckets.size > MAX_LOCAL_RATE_BUCKETS) {
+    localRateBuckets.delete(localRateBuckets.keys().next().value);
+  }
 }
 
 function cors(response) {
@@ -53,10 +111,11 @@ function cors(response) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-function json(payload, status = 200, maxAge = 0) {
+function json(payload, status = 200, maxAge = 0, extraHeaders = {}) {
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': maxAge ? `public, max-age=${maxAge}` : 'no-store'
+    'Cache-Control': maxAge ? `public, max-age=${maxAge}` : 'no-store',
+    ...extraHeaders
   };
   return cors(new Response(JSON.stringify(payload), { status, headers }));
 }

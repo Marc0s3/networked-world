@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import py_compile
+import json
 import re
 import shutil
 import subprocess
@@ -53,6 +54,16 @@ def main() -> None:
     if "Professional Atlas" not in html or '<script src="config.js"></script>' not in html:
         fail("index.html is not the expected Professional Atlas application")
 
+    worker_text = (ROOT / "worker/worker.js").read_text(encoding="utf-8")
+    worker_config = json.loads((ROOT / "worker/wrangler.jsonc").read_text(encoding="utf-8"))
+    if worker_config.get("ratelimits"):
+        fail("the public worker must not require paid Cloudflare rate-limit bindings")
+    for required in ("LOCAL_RATE_LIMITS", "localRateBuckets", "trimLocalRateBuckets"):
+        if required not in worker_text:
+            fail(f"missing zero-cost local rate-limit guard: {required}")
+    if "Retry-After" not in worker_text or "cached = await cache.match(key)" not in worker_text:
+        fail("worker rate limiting must return retry guidance and preserve cache-first behavior")
+
     node = shutil.which("node")
     if node:
         scripts = re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, flags=re.DOTALL | re.IGNORECASE)
@@ -61,7 +72,7 @@ def main() -> None:
             app_js = Path(tmp) / "app.js"
             worker_js = Path(tmp) / "worker.mjs"
             app_js.write_text(inline, encoding="utf-8")
-            worker_js.write_text((ROOT / "worker/worker.js").read_text(encoding="utf-8"), encoding="utf-8")
+            worker_js.write_text(worker_text, encoding="utf-8")
             subprocess.run([node, "--check", str(app_js)], check=True)
             subprocess.run([node, "--check", str(worker_js)], check=True)
 
