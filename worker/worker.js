@@ -2,6 +2,7 @@ const UPSTREAM = 'https://api.networked.art';
 const PER_PAGE = 100;
 const MAX_PAGES = 50;
 const MAX_WORKS = 5000;
+const RATE_LIMIT_RETRY_AFTER = 60;
 
 export default {
   async fetch(request, env, ctx) {
@@ -15,7 +16,14 @@ export default {
       let match = url.pathname.match(/^\/api\/networked\/profile\/([^/]+)\/works$/);
       if (match) {
         const account = validateAccount(decodeURIComponent(match[1]));
-        return cachedRoute(request, ctx, 120, () => buildProfileWorks(account));
+        return cachedRoute(
+          request,
+          ctx,
+          120,
+          env.PROFILE_RATE_LIMITER,
+          rateLimitKey(request, 'profile'),
+          () => buildProfileWorks(account)
+        );
       }
 
       match = url.pathname.match(/^\/api\/networked\/work\/(0x[a-fA-F0-9]{40})\/([0-9]+)$/);
@@ -23,7 +31,14 @@ export default {
         const account = validateAccount(url.searchParams.get('account') || '');
         const collection = match[1].toLowerCase();
         const tokenId = match[2];
-        return cachedRoute(request, ctx, 60, () => getWorkDetail(account, collection, tokenId));
+        return cachedRoute(
+          request,
+          ctx,
+          60,
+          env.WORK_RATE_LIMITER,
+          rateLimitKey(request, 'work'),
+          () => getWorkDetail(account, collection, tokenId)
+        );
       }
 
       return json({ error: 'Not found' }, 404);
@@ -33,15 +48,38 @@ export default {
   }
 };
 
-async function cachedRoute(request, ctx, maxAge, producer) {
+async function cachedRoute(request, ctx, maxAge, limiter, limitKey, producer) {
   const cache = caches.default;
   const key = new Request(request.url, { method: 'GET' });
   const cached = await cache.match(key);
   if (cached) return cors(cached);
+
+  const limited = await rateLimitMiss(limiter, limitKey);
+  if (limited) return limited;
+
   const payload = await producer();
   const response = json(payload, 200, maxAge);
   ctx.waitUntil(cache.put(key, response.clone()));
   return response;
+}
+
+function rateLimitKey(request, route) {
+  const client = request.headers.get('CF-Connecting-IP') || 'unknown-client';
+  return `${route}:${client}`;
+}
+
+async function rateLimitMiss(limiter, key) {
+  // Wrangler provides the binding in production. Keeping the guard makes local
+  // module tests and staged rollouts fail open rather than breaking the app.
+  if (!limiter || typeof limiter.limit !== 'function') return null;
+  const { success } = await limiter.limit({ key });
+  if (success) return null;
+  return json(
+    { error: 'Too many uncached requests. Please try again shortly.' },
+    429,
+    0,
+    { 'Retry-After': String(RATE_LIMIT_RETRY_AFTER) }
+  );
 }
 
 function cors(response) {
@@ -53,10 +91,11 @@ function cors(response) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-function json(payload, status = 200, maxAge = 0) {
+function json(payload, status = 200, maxAge = 0, extraHeaders = {}) {
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': maxAge ? `public, max-age=${maxAge}` : 'no-store'
+    'Cache-Control': maxAge ? `public, max-age=${maxAge}` : 'no-store',
+    ...extraHeaders
   };
   return cors(new Response(JSON.stringify(payload), { status, headers }));
 }
