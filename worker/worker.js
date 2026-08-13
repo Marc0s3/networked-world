@@ -3,6 +3,10 @@ const PER_PAGE = 100;
 const MAX_PAGES = 50;
 const MAX_WORKS = 5000;
 const RATE_LIMIT_RETRY_AFTER = 60;
+const LOCAL_RATE_WINDOW_MS = RATE_LIMIT_RETRY_AFTER * 1000;
+const LOCAL_RATE_LIMITS = Object.freeze({ profile: 10, work: 1500 });
+const MAX_LOCAL_RATE_BUCKETS = 10000;
+const localRateBuckets = new Map();
 
 export default {
   async fetch(request, env, ctx) {
@@ -20,8 +24,7 @@ export default {
           request,
           ctx,
           120,
-          env.PROFILE_RATE_LIMITER,
-          rateLimitKey(request, 'profile'),
+          'profile',
           () => buildProfileWorks(account)
         );
       }
@@ -35,8 +38,7 @@ export default {
           request,
           ctx,
           60,
-          env.WORK_RATE_LIMITER,
-          rateLimitKey(request, 'work'),
+          'work',
           () => getWorkDetail(account, collection, tokenId)
         );
       }
@@ -48,13 +50,13 @@ export default {
   }
 };
 
-async function cachedRoute(request, ctx, maxAge, limiter, limitKey, producer) {
+async function cachedRoute(request, ctx, maxAge, route, producer) {
   const cache = caches.default;
   const key = new Request(request.url, { method: 'GET' });
   const cached = await cache.match(key);
   if (cached) return cors(cached);
 
-  const limited = await rateLimitMiss(limiter, limitKey);
+  const limited = rateLimitMiss(request, route);
   if (limited) return limited;
 
   const payload = await producer();
@@ -68,18 +70,36 @@ function rateLimitKey(request, route) {
   return `${route}:${client}`;
 }
 
-async function rateLimitMiss(limiter, key) {
-  // Wrangler provides the binding in production. Keeping the guard makes local
-  // module tests and staged rollouts fail open rather than breaking the app.
-  if (!limiter || typeof limiter.limit !== 'function') return null;
-  const { success } = await limiter.limit({ key });
-  if (success) return null;
+function rateLimitMiss(request, route) {
+  const key = rateLimitKey(request, route);
+  const now = Date.now();
+  const limit = LOCAL_RATE_LIMITS[route];
+  const current = localRateBuckets.get(key);
+
+  if (!current || now - current.startedAt >= LOCAL_RATE_WINDOW_MS) {
+    localRateBuckets.set(key, { startedAt: now, count: 1 });
+    trimLocalRateBuckets(now);
+    return null;
+  }
+
+  current.count += 1;
+  if (current.count <= limit) return null;
   return json(
     { error: 'Too many uncached requests. Please try again shortly.' },
     429,
     0,
     { 'Retry-After': String(RATE_LIMIT_RETRY_AFTER) }
   );
+}
+
+function trimLocalRateBuckets(now) {
+  if (localRateBuckets.size <= MAX_LOCAL_RATE_BUCKETS) return;
+  for (const [key, entry] of localRateBuckets) {
+    if (now - entry.startedAt >= LOCAL_RATE_WINDOW_MS) localRateBuckets.delete(key);
+  }
+  while (localRateBuckets.size > MAX_LOCAL_RATE_BUCKETS) {
+    localRateBuckets.delete(localRateBuckets.keys().next().value);
+  }
 }
 
 function cors(response) {

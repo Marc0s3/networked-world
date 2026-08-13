@@ -56,10 +56,11 @@ def main() -> None:
 
     worker_text = (ROOT / "worker/worker.js").read_text(encoding="utf-8")
     worker_config = json.loads((ROOT / "worker/wrangler.jsonc").read_text(encoding="utf-8"))
-    configured_limiters = {item.get("name") for item in worker_config.get("ratelimits", [])}
-    for limiter in ("PROFILE_RATE_LIMITER", "WORK_RATE_LIMITER"):
-        if limiter not in configured_limiters or f"env.{limiter}" not in worker_text:
-            fail(f"missing Cloudflare rate limiter: {limiter}")
+    if worker_config.get("ratelimits"):
+        fail("the public worker must not require paid Cloudflare rate-limit bindings")
+    for required in ("LOCAL_RATE_LIMITS", "localRateBuckets", "trimLocalRateBuckets"):
+        if required not in worker_text:
+            fail(f"missing zero-cost local rate-limit guard: {required}")
     if "Retry-After" not in worker_text or "cached = await cache.match(key)" not in worker_text:
         fail("worker rate limiting must return retry guidance and preserve cache-first behavior")
 
